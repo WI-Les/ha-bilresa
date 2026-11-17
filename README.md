@@ -5,6 +5,8 @@ Matter remotes. Configure channels and gestures in the Home Assistant interface.
 
 Maintained by **Les.**, based on the work of [Vituhlos and contributors](https://github.com/Vituhlos/ha-ikea-bilresa). This independent community project is not affiliated with or endorsed by IKEA.
 
+See the [changelog](CHANGELOG.md) for changes relative to the upstream release.
+
 ## Features
 
 - Discover supported BILRESA wheels and buttons through Matter.
