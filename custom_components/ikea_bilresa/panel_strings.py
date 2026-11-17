@@ -298,6 +298,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Configure this control before testing it."
         ),
         "validation_invalid_value": "Choose or enter a valid value.",
+        "validation_follower_overlap": (
+            "Choose lights or groups that do not share any members."
+        ),
         "validation_target_required": "Choose a target.",
         "validation_ramp_requires_light": "Ramping needs a light as the hold target.",
         "validation_scene_cannot_turn_off": (
@@ -814,6 +817,9 @@ STRINGS: dict[str, dict[str, str]] = {
             "Před testem nejdřív nastavte tento ovládací prvek."
         ),
         "validation_invalid_value": "Vyberte nebo zadejte platnou hodnotu.",
+        "validation_follower_overlap": (
+            "Choose lights or groups that do not share any members."
+        ),
         "validation_target_required": "Vyberte cíl.",
         "validation_ramp_requires_light": (
             "Pro plynulou změnu musí být cílem podržení světlo."

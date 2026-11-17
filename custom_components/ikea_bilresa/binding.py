@@ -153,6 +153,7 @@ from .gesture_actions import (
     passes_variables,
     result_label,
 )
+from .groups import expand_members
 from .trace import RotationTrace
 
 _LOGGER = logging.getLogger(__name__)
@@ -1619,7 +1620,14 @@ class LightBinding:
         state = self._target_state()
         if state is None:
             return False
-        tracked = self._resync(_as_float(state.attributes.get("volume_level")), 0.5)
+        raw_volume = state.attributes.get("volume_level")
+        current = None if isinstance(raw_volume, bool) else _as_float(raw_volume)
+        if current is None or not math.isfinite(current) or not 0 <= current <= 1:
+            # An arbitrary fallback could unexpectedly make a quiet player loud.
+            self._invalidate_tracking("volume_level_unknown")
+            self._report_activity("skipped", reason="volume_level_unknown")
+            return False
+        tracked = self._resync(current, current)
         target = min(1.0, max(0.0, tracked + self._delta(self._step, 1, notches, up)))
         self._set_target(target, 1)
         result = self._value_result(
@@ -1859,18 +1867,7 @@ class LightBinding:
 
     def _with_members(self, entity_ids: Iterable[str]) -> set[str]:
         """Add the members of every scene or group, nested ones included."""
-        found: set[str] = set()
-        todo = list(entity_ids)
-        while todo:
-            entity_id = todo.pop()
-            if entity_id in found:
-                continue
-            found.add(entity_id)
-            state = self.hass.states.get(entity_id)
-            members = state.attributes.get(ATTR_ENTITY_ID) if state else None
-            if isinstance(members, (list, tuple)):
-                todo.extend(members)
-        return found
+        return expand_members(self.hass, entity_ids)
 
     @callback
     def _handle_targets_commanded(
@@ -1890,7 +1887,9 @@ class LightBinding:
         if sender is self or self._keeps_volume(domain, service):
             return
         # A rotated group also changes when one of its lights is pressed.
-        if self._follower and self._follower in entity_ids:
+        if self._follower and not self._with_members([self._follower]).isdisjoint(
+            entity_ids
+        ):
             self._advance_follower_revision()
         if not self._with_members(self._targets).isdisjoint(entity_ids):
             self._advance_follower_revision()
@@ -2357,6 +2356,14 @@ class LightBinding:
             return
         follower_state = self.hass.states.get(self._follower)
         if follower_state is None or follower_state.state != "on":
+            return
+        # A follower may be a group itself, or may occur inside the primary
+        # group. Sending both values to any shared member causes jumps. Check
+        # after the primary call too, because group membership can change.
+        if not self._with_members(self._targets).isdisjoint(
+            self._with_members([self._follower])
+        ):
+            _LOGGER.warning("BILRESA follower overlaps the primary light group")
             return
         percent = max(
             self._follower_min,

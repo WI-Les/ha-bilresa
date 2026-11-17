@@ -119,6 +119,7 @@
         }
       },
       "error": {
+        "follower_overlap": "Choose lights or groups that do not share any members.",
         "fast_response_conflicts_with_multi_press": "Rychlou odezvu nelze kombinovat s cílem pro více stisků. Tento cíl odeberte nebo zvolte rozpoznání více stisků.",
         "instant_response_conflicts_with_multi_press": "Okamžitou odezvu nelze kombinovat s cílem pro více stisků. Tento cíl odeberte nebo zvolte rozpoznání více stisků.",
         "instant_response_conflicts_with_hold": "Okamžitou odezvu nelze kombinovat se samostatnou akcí podržení. Nastavte podržení na Nedělat nic nebo zvolte Rychle po uvolnění či rozpoznání více stisků.",

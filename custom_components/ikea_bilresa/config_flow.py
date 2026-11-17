@@ -95,6 +95,7 @@ from .const import (
 )
 from .device_link import resolve_matter_device
 from .gesture_verbs import default_verb
+from .groups import follower_overlaps
 from .matter_ws import MatterWSIncompatible, validate_server_info
 from .model import BilresaWheel
 from .presentation import generated_binding_title, generated_button_binding_title
@@ -327,6 +328,13 @@ class BindingSubentryFlowHandler(ConfigSubentryFlow):
             if step_id != "reconfigure":
                 candidate = _run_scripts_and_scenes(candidate)
             normalized, errors = self._normalize_and_validate(candidate)
+            if (
+                normalized is not None
+                and normalized.get(CONF_FOLLOWER)
+                and follower_overlaps(self.hass, normalized)
+            ):
+                normalized = None
+                errors = {CONF_FOLLOWER: "follower_overlap"}
             if normalized is not None and CONF_ENDPOINT in normalized:
                 device = self._device(str(normalized[CONF_NODE_ID]))
                 endpoint = (

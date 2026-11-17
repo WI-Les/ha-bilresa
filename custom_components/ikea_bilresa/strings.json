@@ -119,6 +119,7 @@
         }
       },
       "error": {
+        "follower_overlap": "Choose lights or groups that do not share any members.",
         "fast_response_conflicts_with_multi_press": "Fast response cannot be combined with a multi-press target. Remove that target or choose multi-press recognition.",
         "instant_response_conflicts_with_multi_press": "Instant response cannot be combined with a multi-press target. Remove that target or choose multi-press recognition.",
         "instant_response_conflicts_with_hold": "Instant response cannot be combined with a separate hold action. Set hold to Do nothing or choose Fast release / Multi-press aware.",

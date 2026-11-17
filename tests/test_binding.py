@@ -145,7 +145,9 @@ async def test_follower_tracks_dispatched_brightness_only_when_on(
         },
     )
     binding.hass.data = {}
-    binding.hass.states.get = Mock(return_value=SimpleNamespace(state=follower_state))
+    binding.hass.states.get = Mock(
+        return_value=SimpleNamespace(state=follower_state, attributes={})
+    )
     binding.hass.services.async_call = AsyncMock()
     binding._async_dispatch_service = AsyncMock(return_value=True)
     revision = binding._advance_follower_revision()
@@ -165,6 +167,42 @@ async def test_follower_tracks_dispatched_brightness_only_when_on(
             },
             blocking=True,
         )
+
+
+@pytest.mark.parametrize(
+    ("primary_members", "follower_members", "expected_calls"),
+    [
+        (["light.follower"], [], 0),
+        (["light.nested"], [], 0),
+        ([], ["light.test"], 0),
+        (["light.shared"], ["light.shared"], 0),
+        (["light.other"], [], 1),
+        ([], [], 1),
+    ],
+)
+async def test_follower_skips_overlapping_light_groups(
+    monkeypatch, primary_members, follower_members, expected_calls
+) -> None:
+    binding, _, _ = _binding(monkeypatch, **{CONF_FOLLOWER: "light.follower"})
+    binding.hass.data = {}
+    states = {
+        "light.test": SimpleNamespace(
+            state="on", attributes={"entity_id": primary_members}
+        ),
+        "light.follower": SimpleNamespace(
+            state="on", attributes={"entity_id": follower_members}
+        ),
+        # Include a cycle to verify group traversal terminates.
+        "light.nested": SimpleNamespace(
+            state="on", attributes={"entity_id": ["light.test", "light.follower"]}
+        ),
+    }
+    binding.hass.states.get = Mock(side_effect=states.get)
+    binding.hass.services.async_call = AsyncMock()
+    binding._async_dispatch_service = AsyncMock(return_value=True)
+    revision = binding._advance_follower_revision()
+    await binding._async_dispatch_with_follower(None, {}, None, 1, revision, 128, 0.6)
+    assert binding.hass.services.async_call.await_count == expected_calls
 
 
 async def test_follower_ignores_failed_and_superseded_primary_calls(
@@ -193,6 +231,29 @@ async def test_follower_revision_is_shared_across_remote_bindings(monkeypatch) -
     second._advance_follower_revision()
     await first._async_dispatch_with_follower(None, {}, None, 1, old, 128, 0.6)
     first.hass.services.async_call.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "changed,invalidated", [("light.member", True), ("light.other", False)]
+)
+async def test_other_binding_invalidates_follower_group_member(
+    monkeypatch, changed: str, invalidated: bool
+) -> None:
+    binding, _, _ = _binding(monkeypatch, **{CONF_FOLLOWER: "light.follower"})
+    binding.hass.data = {}
+    states = {
+        "light.follower": SimpleNamespace(
+            state="on", attributes={"entity_id": ["light.member"]}
+        ),
+        "light.test": SimpleNamespace(state="on", attributes={}),
+    }
+    binding.hass.states.get = Mock(side_effect=states.get)
+    binding.hass.services.async_call = AsyncMock()
+    binding._async_dispatch_service = AsyncMock(return_value=True)
+    revision = binding._advance_follower_revision()
+    binding._handle_targets_commanded(object(), {changed}, "light", "turn_off")
+    await binding._async_dispatch_with_follower(None, {}, None, 1, revision, 128, 0.6)
+    assert binding.hass.services.async_call.await_count == (0 if invalidated else 1)
 
 
 async def test_dispatched_brightness_sends_primary_then_follower(monkeypatch) -> None:
@@ -712,6 +773,36 @@ def test_rotation_modes_do_not_call_services_for_unavailable_target(
     getattr(binding, method_name)(1, True)
 
     binding.hass.async_create_task.assert_not_called()
+
+
+@pytest.mark.parametrize("volume", [None, "unknown", True, -0.1, 1.1, "nan", "inf"])
+def test_unknown_volume_never_guesses_or_keeps_pending_command(
+    monkeypatch, volume: Any
+) -> None:
+    binding, _, _ = _binding(
+        monkeypatch, **{CONF_TARGET: "media_player.example", CONF_MODE: MODE_VOLUME}
+    )
+    binding.hass.states.get.return_value = SimpleNamespace(
+        state="playing", attributes={"volume_level": volume}
+    )
+    binding._tracked = 0.2
+    binding._pending_command = ("media_player", "volume_set", {}, {})
+    assert binding._rotate_volume(1, True) is False
+    assert binding._tracked is None
+    assert binding._pending_command is None
+    binding.hass.services.async_call.assert_not_called()
+
+
+def test_volume_resumes_from_reported_level_after_invalid_state(monkeypatch) -> None:
+    binding, _, _ = _binding(
+        monkeypatch, **{CONF_TARGET: "media_player.example", CONF_MODE: MODE_VOLUME}
+    )
+    state = SimpleNamespace(state="playing", attributes={"volume_level": None})
+    binding.hass.states.get.return_value = state
+    assert binding._rotate_volume(1, True) is False
+    state.attributes["volume_level"] = 0.2
+    assert binding._rotate_volume(1, True) is True
+    assert binding._tracked == pytest.approx(0.23)
 
 
 @pytest.mark.parametrize(

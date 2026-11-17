@@ -34,6 +34,7 @@ from custom_components.ikea_bilresa.const import (
     CONF_DOUBLE_ACTION,
     CONF_DOUBLE_TARGET,
     CONF_ENDPOINT,
+    CONF_FOLLOWER,
     CONF_HOLD_ACTION,
     CONF_HOLD_TARGET,
     CONF_HOLD_TARGET_ACTION,
@@ -682,6 +683,20 @@ async def test_submitting_a_new_binding_runs_its_scripts_and_scenes() -> None:
     assert stored[CONF_DOUBLE_ACTION] == "on"
     assert stored[CONF_TRIPLE_ACTION] == "on"
     assert stored[CONF_HOLD_TARGET_ACTION] == "on"
+
+
+async def test_native_form_rejects_follower_inside_primary_group() -> None:
+    flow = _form_flow()
+    states = {
+        "light.main": SimpleNamespace(attributes={"entity_id": ["light.follower"]}),
+        "light.follower": SimpleNamespace(attributes={}),
+    }
+    flow.hass = SimpleNamespace(states=SimpleNamespace(get=states.get))
+    flow._show_form = lambda _step, _input, errors: {"errors": errors}
+    result = await flow._async_step_form(
+        "user", {**_WHEEL_FORM, CONF_FOLLOWER: "light.follower"}
+    )
+    assert result["errors"] == {CONF_FOLLOWER: "follower_overlap"}
 
 
 async def test_submitting_a_new_binding_keeps_a_chosen_action_and_other_targets() -> (

@@ -22,9 +22,13 @@ must not produce follower calls after a newer value or an off/press action.
 
 - Store and validate the optional light, offset and minimum in binding data.
   The primary cannot be its own follower; non-light followers, multiple primary
-  targets, unsupported modes and out-of-range values are rejected. Nested
-  group membership and cycles across separate bindings are not detected: users
-  must avoid those configurations until explicit cycle validation is added.
+  targets, unsupported modes and out-of-range values are rejected. Both setup
+  forms reject overlapping known light groups with a clear field error. Before a
+  follower command, recursively check known group members again and skip the follower
+  if either group contains the other or they share a member. This includes
+  nested groups and terminates even when group membership contains a cycle.
+  Membership not reported by Home Assistant and cycles across separate bindings
+  cannot be detected by this check and must still be avoided.
 - Provide the same options in the native setup form and the BILRESA panel,
   with English labels, accessible controls and an explicit explanation that
   an off follower stays off. Preserve options on edits, copies and upgrades.
@@ -33,7 +37,8 @@ must not produce follower calls after a newer value or an off/press action.
   physical state from a scheduled Home Assistant service call.
 - A primary service failure prevents the follower call. Off or unavailable
   followers are skipped. A shared revision invalidates older follower tasks
-  across bindings; pending operations cannot undo a command already dispatched.
+  across bindings, including when another binding changes a member of a follower
+  group; pending operations cannot undo a command already dispatched.
   Follower service failures are logged. Full concurrent device behavior remains
   to be validated on hardware.
 - Diagnostics must redact configured entity IDs and user action data.

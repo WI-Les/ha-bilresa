@@ -52,6 +52,7 @@ from .const import (
     CONF_CHANNEL,
     CONF_CHANNEL_ENABLED,
     CONF_ENDPOINT,
+    CONF_FOLLOWER,
     CONF_NODE_ID,
     CONF_STEP,
     DIRECTION_DOWN,
@@ -67,6 +68,7 @@ from .const import (
     SUBENTRY_WHEEL,
 )
 from .engine import WheelAction
+from .groups import follower_overlaps
 from .panel_models import (
     CONTRACT_VERSION,
     async_overview_snapshot,
@@ -513,6 +515,16 @@ def ws_binding_save(
     if normalized is None:
         connection.send_result(
             msg["id"], {"ok": False, "error": "validation", "fields": errors}
+        )
+        return
+    if follower_overlaps(hass, normalized):
+        connection.send_result(
+            msg["id"],
+            {
+                "ok": False,
+                "error": "validation",
+                "fields": {CONF_FOLLOWER: "follower_overlap"},
+            },
         )
         return
 
