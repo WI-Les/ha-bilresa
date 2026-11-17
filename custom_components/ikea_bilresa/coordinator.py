@@ -1,0 +1,508 @@
+"""Runtime coordinator: Matter Server listener + wheel/action dispatch."""
+
+from __future__ import annotations
+
+import asyncio
+from collections import Counter, deque
+from collections.abc import Callable
+from dataclasses import asdict
+from datetime import UTC, datetime
+import logging
+from typing import Any
+
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers import issue_registry as ir
+from homeassistant.helpers.aiohttp_client import async_get_clientsession
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.event import async_call_later
+
+from .binding import LightBinding
+from .channel_controls import DEFAULT_SETTINGS, WheelSettings
+from .const import (
+    ACTION_SHORT_RELEASE,
+    ATTR_SWITCH_CURRENT_POSITION,
+    CLUSTER_SWITCH,
+    CONF_CHANNEL,
+    CONF_ENDPOINT,
+    CONF_NODE_ID,
+    DISCONNECT_GRACE_SECONDS,
+    DOMAIN,
+    EVENT_BILRESA,
+    ISSUE_CANNOT_CONNECT,
+    SIGNAL_BINDING_ACTIVITY,
+    SIGNAL_CONNECTION,
+    SIGNAL_SETTINGS_UPDATED,
+    SIGNAL_WHEELS_UPDATED,
+    SUBENTRY_BINDING,
+    SUBENTRY_WHEEL,
+    signal_channel,
+    signal_raw_button,
+)
+from .device_link import DeviceLinkManager
+from .engine import GestureEngine, WheelAction
+from .matter_core import CoreMatterEventSource, CoreMatterUnavailable
+from .matter_ws import MatterWSClient
+from .model import BilresaWheel, decode_event, parse_node
+from .trace import RotationTrace
+
+_LOGGER = logging.getLogger(__name__)
+
+BindingKey = tuple[int, str, int]
+
+
+def _action_binding_key(action: WheelAction) -> BindingKey:
+    """Address wheel channels and button endpoints without sharing a keyspace."""
+    if action.channel is not None:
+        return (action.node_id, CONF_CHANNEL, action.channel)
+    return (action.node_id, CONF_ENDPOINT, action.endpoint_id)
+
+
+class BilresaCoordinator:
+    """Owns the Matter Server connection and turns events into actions.
+
+    Discovery and per-gesture state are keyed by node/endpoint, so any number
+    of wheels are handled without configuration, including wheels commissioned
+    or removed while Home Assistant is running.
+    """
+
+    def __init__(self, hass: HomeAssistant, url: str) -> None:
+        self.hass = hass
+        self.url = url
+        self.connected = False
+        self.wheels: dict[int, BilresaWheel] = {}
+        self.wheel_settings: dict[int, WheelSettings] = {}
+        # Where each wheel's entities sit in the device registry. Scoped to a
+        # config entry by `async_setup_device_links`.
+        self._device_links: DeviceLinkManager | None = None
+        self._engine = GestureEngine()
+        # Shared by every binding so one capture covers all of them at once.
+        self.rotation_trace = RotationTrace()
+        self._client: CoreMatterEventSource | MatterWSClient = CoreMatterEventSource(
+            hass, url, self._on_event, self._core_matter_unavailable
+        )
+        self._source_switch_lock = asyncio.Lock()
+        self._stopping = False
+        self._binding_unsubs: list[Callable[[], None]] = []
+        self._binding_keys: set[BindingKey] = set()
+        self._bindings: dict[BindingKey, LightBinding] = {}
+        self._disconnect_timer: Callable[[], None] | None = None
+        self._event_counts: Counter[str] = Counter()
+        self._ignored_counts: Counter[str] = Counter()
+        self._recent_events: deque[dict[str, Any]] = deque(maxlen=20)
+        self._actions_dispatched = 0
+        self._actions_suppressed = 0
+        self._connection_count = 0
+        self._fallback_count = 0
+        self._last_event_at: datetime | None = None
+        self._last_fallback_reason: str | None = None
+
+    @property
+    def matter_server_info(self) -> dict | None:
+        """Server info reported by the Matter Server (schema, sdk version)."""
+        return self._client.server_info
+
+    @property
+    def event_source(self) -> str:
+        """Return which Matter event stream is currently in use."""
+        return self._client.source
+
+    @property
+    def telemetry(self) -> dict[str, Any]:
+        """Return bounded, privacy-safe runtime counters for diagnostics."""
+        return {
+            "event_counts": dict(self._event_counts),
+            "ignored_counts": dict(self._ignored_counts),
+            "actions_dispatched": self._actions_dispatched,
+            "actions_suppressed": self._actions_suppressed,
+            "connection_count": self._connection_count,
+            "fallback_count": self._fallback_count,
+            "last_fallback_reason": self._last_fallback_reason,
+            "last_event_at": (
+                self._last_event_at.isoformat() if self._last_event_at else None
+            ),
+            "recent_events": list(self._recent_events),
+            "rotation_trace_enabled": self.rotation_trace.enabled,
+            "rotation_trace": self.rotation_trace.dump(),
+        }
+
+    async def async_start(self) -> None:
+        self._stopping = False
+        try:
+            await self._client.start()
+        except CoreMatterUnavailable as err:
+            _LOGGER.warning(
+                "Cannot reuse Home Assistant's Matter client (%s); falling back "
+                "to a dedicated read-only WebSocket",
+                err,
+            )
+            self._fallback_count += 1
+            self._last_fallback_reason = str(err)
+            self._client = MatterWSClient(
+                self.url, async_get_clientsession(self.hass), self._on_event
+            )
+            await self._client.start()
+
+    async def async_stop(self) -> None:
+        self._stopping = True
+        self._detach_bindings()
+        if self._disconnect_timer is not None:
+            self._disconnect_timer()
+            self._disconnect_timer = None
+        await self._client.stop()
+
+    @callback
+    def _core_matter_unavailable(self, reason: str) -> None:
+        """Schedule a one-way runtime fallback without blocking HA callbacks."""
+        if self._stopping or not isinstance(self._client, CoreMatterEventSource):
+            return
+        self.hass.async_create_task(self._async_fallback_to_websocket(reason))
+
+    async def _async_fallback_to_websocket(self, reason: str) -> None:
+        async with self._source_switch_lock:
+            if self._stopping or not isinstance(self._client, CoreMatterEventSource):
+                return
+            _LOGGER.warning(
+                "Core Matter event source became unavailable (%s); switching "
+                "to the dedicated passive WebSocket",
+                reason,
+            )
+            self._fallback_count += 1
+            self._last_fallback_reason = reason
+            await self._client.stop()
+            self._client = MatterWSClient(
+                self.url, async_get_clientsession(self.hass), self._on_event
+            )
+            await self._client.start()
+
+    # -- per-wheel channel settings ---------------------------------------
+
+    @callback
+    def async_setup_device_links(self, entry: ConfigEntry) -> None:
+        """Start placing wheel entities on their devices for this config entry.
+
+        Must run before the entity platforms are forwarded: they ask for each
+        wheel's link while they build their entities.
+        """
+        self._device_links = DeviceLinkManager(self.hass, entry.entry_id, self)
+        entry.async_on_unload(self._device_links.async_start())
+
+    @property
+    def device_links(self) -> DeviceLinkManager:
+        """The device link manager; available once the entry is being set up."""
+        if self._device_links is None:
+            raise RuntimeError("Device links are set up with the config entry")
+        return self._device_links
+
+    @callback
+    def async_setup_settings(self, entry: ConfigEntry) -> None:
+        """(Re)load per-wheel settings from the entry's subentries, in place.
+
+        Called on setup and whenever a `wheel_settings` subentry changes, so
+        disabling a channel never needs a reload / reconnect.
+        """
+        settings: dict[int, WheelSettings] = {}
+        for subentry in entry.subentries.values():
+            if subentry.subentry_type != SUBENTRY_WHEEL:
+                continue
+            parsed = WheelSettings.from_data(dict(subentry.data))
+            if parsed.node_id is not None:
+                settings[parsed.node_id] = parsed
+        self.wheel_settings = settings
+        async_dispatcher_send(self.hass, SIGNAL_SETTINGS_UPDATED)
+
+    @callback
+    def settings_for(self, node_id: int) -> WheelSettings:
+        """Settings for one wheel, falling back to the defaults."""
+        return self.wheel_settings.get(node_id, DEFAULT_SETTINGS)
+
+    @callback
+    def channel_enabled(self, node_id: int, channel: int | None) -> bool:
+        """Whether a wheel channel acts at all, or is ignored entirely."""
+        return self.settings_for(node_id).channel_enabled(channel)
+
+    # -- bindings ---------------------------------------------------------
+
+    @callback
+    def async_setup_bindings(self, entry: ConfigEntry) -> None:
+        """(Re)attach light bindings from the entry's subentries, in place.
+
+        Called on setup and whenever a binding subentry changes, so adding or
+        editing a binding never needs a full reload / reconnect.
+        """
+        self._detach_bindings()
+        for subentry in entry.subentries.values():
+            if subentry.subentry_type != SUBENTRY_BINDING:
+                continue
+            binding = LightBinding(
+                self.hass,
+                dict(subentry.data),
+                trace=self.rotation_trace,
+                device_name=self._device_name_for(subentry.data.get(CONF_NODE_ID)),
+            )
+            self._binding_unsubs.append(binding.async_attach())
+            key = binding.binding_key
+            self._binding_keys.add(key)
+            self._bindings[key] = binding
+        if self._binding_unsubs:
+            _LOGGER.debug("Attached %s control binding(s)", len(self._binding_unsubs))
+
+    @callback
+    def _device_name_for(self, node_id: Any) -> Callable[[], str]:
+        """The current name of one wheel, for a binding that needs it later."""
+
+        def name() -> str:
+            wheel = self.wheels.get(int(node_id)) if node_id is not None else None
+            return wheel.name if wheel is not None else ""
+
+        return name
+
+    @callback
+    def _detach_bindings(self) -> None:
+        for unsub in self._binding_unsubs:
+            unsub()
+        self._binding_unsubs.clear()
+        self._binding_keys.clear()
+        self._bindings.clear()
+
+    @callback
+    def test_binding_action(self, action: WheelAction) -> bool:
+        """Execute a synthetic panel test through one configured binding."""
+        binding = self._bindings.get(_action_binding_key(action))
+        if binding is None:
+            return False
+        binding.test_action(action)
+        return True
+
+    # -- event handling ---------------------------------------------------
+
+    @callback
+    def _on_event(self, event_type: str, data) -> None:
+        self._event_counts[event_type] += 1
+        if event_type == "__connected__":
+            self._set_connected(True)
+        elif event_type == "__disconnected__":
+            self._set_connected(False)
+        elif event_type == "__nodes__":
+            self._handle_nodes(data)
+        elif event_type in ("node_added", "node_updated"):
+            self._add_node(data)
+        elif event_type == "node_removed":
+            self._remove_node(data)
+        elif event_type == "attribute_updated":
+            self._handle_attribute_updated(data)
+        elif event_type == "server_shutdown":
+            self._set_connected(False)
+        elif event_type == "node_event" and isinstance(data, dict):
+            self._last_event_at = datetime.now(UTC)
+            self._recent_events.append(
+                {
+                    "endpoint_id": data.get("endpoint_id"),
+                    "cluster_id": data.get("cluster_id"),
+                    "event_id": data.get("event_id"),
+                    "event_number": data.get("event_number"),
+                }
+            )
+            self._handle_node_event(data)
+        else:
+            self._ignored_counts["unsupported_event"] += 1
+
+    @callback
+    def _handle_attribute_updated(self, data: Any) -> None:
+        """Consume Switch.CurrentPosition as a release/stuck-state safety hint."""
+        if not isinstance(data, (list, tuple)) or len(data) != 3:
+            self._ignored_counts["malformed_attribute_update"] += 1
+            return
+        node_id, path, value = data
+        if not isinstance(node_id, int) or not isinstance(path, str):
+            self._ignored_counts["malformed_attribute_update"] += 1
+            return
+        wheel = self.wheels.get(node_id)
+        if wheel is None:
+            self._ignored_counts["unknown_attribute_node"] += 1
+            return
+        parts = path.split("/")
+        if len(parts) != 3:
+            self._ignored_counts["malformed_attribute_path"] += 1
+            return
+        try:
+            endpoint_id, cluster_id, attribute_id = (int(part) for part in parts)
+        except ValueError:
+            self._ignored_counts["malformed_attribute_path"] += 1
+            return
+        if (
+            cluster_id != CLUSTER_SWITCH
+            or attribute_id != ATTR_SWITCH_CURRENT_POSITION
+            or endpoint_id not in wheel.endpoints
+        ):
+            self._ignored_counts["irrelevant_attribute_update"] += 1
+            return
+        if not isinstance(value, int) or isinstance(value, bool) or value not in (0, 1):
+            self._ignored_counts["invalid_switch_position"] += 1
+            return
+        self._engine.observe_position(node_id, endpoint_id, value)
+
+    @callback
+    def _handle_node_event(self, data: dict) -> None:
+        if data.get("cluster_id") != CLUSTER_SWITCH:
+            self._ignored_counts["non_switch_cluster"] += 1
+            return
+        node_id = data.get("node_id")
+        wheel = self.wheels.get(node_id) if node_id is not None else None
+        if wheel is None:
+            self._ignored_counts["unknown_wheel"] += 1
+            return
+        decoded = decode_event(wheel, data)
+        if decoded is None:
+            self._ignored_counts["undecodable_switch_event"] += 1
+            return
+        # Internal gesture metadata lets bindings distinguish trailing updates
+        # from a deliberate new rotation and lets fast button bindings react to
+        # ShortRelease. It never reaches the public HA event bus. A disabled
+        # channel gets none of it either, or a Fast/Instant binding would act.
+        if self.channel_enabled(wheel.node_id, decoded["channel"]):
+            async_dispatcher_send(
+                self.hass,
+                signal_raw_button(wheel.node_id, decoded["channel"]),
+                decoded["role"],
+                decoded["event_type"],
+                decoded["endpoint_id"],
+            )
+        action = self._engine.process(wheel, decoded)
+        if action is not None:
+            self._dispatch(action)
+        else:
+            self._ignored_counts["non_actionable_switch_event"] += 1
+
+    @callback
+    def _dispatch(self, action: WheelAction) -> None:
+        # A disabled channel is silent all the way down: no bus event, no
+        # channel signal, no binding, no entity movement. The owner's intent is
+        # "this selector position does not exist", so anything that leaked past
+        # here would still let an accidental flip act.
+        if not self.channel_enabled(action.node_id, action.channel):
+            self._actions_suppressed += 1
+            _LOGGER.debug(
+                "suppressed (channel disabled): node=%s ch=%s %s",
+                action.node_id,
+                action.channel,
+                action.type,
+            )
+            return
+        self._actions_dispatched += 1
+        _LOGGER.debug(
+            "action: node=%s ch=%s %s dir=%s notches=%s presses=%s",
+            action.node_id,
+            action.channel,
+            action.type,
+            action.direction,
+            action.notches,
+            action.presses,
+        )
+        event_data = asdict(action)
+        if (
+            self._device_links is not None
+            and (device_id := self._device_links.device_id(action.node_id)) is not None
+        ):
+            event_data["device_id"] = device_id
+        self.hass.bus.async_fire(EVENT_BILRESA, event_data)
+        if action.type == ACTION_SHORT_RELEASE:
+            # Bus-only: entities, triggers and bindings keep completed-gesture
+            # semantics; fast bindings already get ShortRelease via the raw signal.
+            return
+        async_dispatcher_send(
+            self.hass, signal_channel(action.node_id, action.channel), action
+        )
+        if _action_binding_key(action) not in self._binding_keys:
+            async_dispatcher_send(
+                self.hass,
+                SIGNAL_BINDING_ACTIVITY,
+                {
+                    **event_data,
+                    "dispatch_status": "not_configured",
+                    "dispatched": False,
+                    "result": None,
+                    "reason": "binding_not_configured",
+                },
+            )
+
+    # -- discovery (initial dump + hot add/remove) ------------------------
+
+    @callback
+    def _handle_nodes(self, nodes) -> None:
+        if not nodes:
+            return
+        added = False
+        for node in nodes:
+            if self._register_wheel(node):
+                added = True
+        if added:
+            self._engine.reset()
+            async_dispatcher_send(self.hass, SIGNAL_WHEELS_UPDATED)
+
+    @callback
+    def _add_node(self, node) -> None:
+        if self._register_wheel(node):
+            async_dispatcher_send(self.hass, SIGNAL_WHEELS_UPDATED)
+
+    @callback
+    def _register_wheel(self, node) -> bool:
+        wheel = parse_node(node)
+        if wheel is None:
+            return False
+        existing = self.wheels.get(wheel.node_id)
+        if existing == wheel:
+            return False
+        self.wheels[wheel.node_id] = wheel
+        if existing is not None:
+            _LOGGER.info("Updated BILRESA wheel metadata for node %s", wheel.node_id)
+            return True
+        _LOGGER.info(
+            "Discovered BILRESA %s: node %s '%s' -> %s",
+            wheel.variant,
+            wheel.node_id,
+            wheel.name,
+            {ep: (e.channel, e.role) for ep, e in wheel.endpoints.items()},
+        )
+        return True
+
+    @callback
+    def _remove_node(self, data) -> None:
+        node_id = data if isinstance(data, int) else (data or {}).get("node_id")
+        if node_id in self.wheels:
+            wheel = self.wheels.pop(node_id)
+            if self._device_links is not None:
+                self._device_links.forget(node_id)
+            _LOGGER.info("BILRESA wheel removed: node %s '%s'", node_id, wheel.name)
+            async_dispatcher_send(self.hass, SIGNAL_WHEELS_UPDATED)
+
+    # -- connection state + repair issue ----------------------------------
+
+    @callback
+    def _set_connected(self, connected: bool) -> None:
+        if connected and not self.connected:
+            self._connection_count += 1
+        self.connected = connected
+        if connected:
+            if self._disconnect_timer is not None:
+                self._disconnect_timer()
+                self._disconnect_timer = None
+            ir.async_delete_issue(self.hass, DOMAIN, ISSUE_CANNOT_CONNECT)
+        elif self._disconnect_timer is None:
+            self._disconnect_timer = async_call_later(
+                self.hass, DISCONNECT_GRACE_SECONDS, self._raise_connect_issue
+            )
+        async_dispatcher_send(self.hass, SIGNAL_CONNECTION)
+
+    @callback
+    def _raise_connect_issue(self, _now) -> None:
+        self._disconnect_timer = None
+        ir.async_create_issue(
+            self.hass,
+            DOMAIN,
+            ISSUE_CANNOT_CONNECT,
+            is_fixable=False,
+            severity=ir.IssueSeverity.ERROR,
+            translation_key=ISSUE_CANNOT_CONNECT,
+            translation_placeholders={"url": self.url},
+        )

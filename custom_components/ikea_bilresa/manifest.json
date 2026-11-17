@@ -1,0 +1,22 @@
+{
+  "domain": "ikea_bilresa",
+  "name": "IKEA BILRESA",
+  "codeowners": [
+    "@WI-Les"
+  ],
+  "config_flow": true,
+  "dependencies": [
+    "frontend",
+    "http",
+    "matter",
+    "panel_custom",
+    "websocket_api"
+  ],
+  "documentation": "https://github.com/WI-Les/ha-bilresa",
+  "integration_type": "hub",
+  "iot_class": "local_push",
+  "issue_tracker": "https://github.com/WI-Les/ha-bilresa/issues",
+  "requirements": [],
+  "single_config_entry": true,
+  "version": "0.1.0-rc.1"
+}

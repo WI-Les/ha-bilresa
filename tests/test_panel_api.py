@@ -1,0 +1,912 @@
+"""Panel API privacy, subscription lifecycle and binding mutation tests."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from unittest.mock import MagicMock
+
+from custom_components.ikea_bilresa.channel_controls import DEFAULT_SETTINGS
+from custom_components.ikea_bilresa.const import (
+    CONF_ACCELERATION,
+    CONF_CHANNEL,
+    CONF_CHANNEL_ENABLED,
+    CONF_CLICK_ACTION,
+    CONF_CLICK_TARGET,
+    CONF_ENDPOINT,
+    CONF_HOLD_ACTION,
+    CONF_MODE,
+    CONF_NODE_ID,
+    CONF_STEP,
+    CONF_TARGET,
+    DOMAIN,
+    EVENT_BILRESA,
+    SIGNAL_BINDINGS_UPDATED,
+    SIGNAL_CONNECTION,
+    SIGNAL_WHEELS_UPDATED,
+    SUBENTRY_BINDING,
+    SUBENTRY_WHEEL,
+)
+from custom_components.ikea_bilresa.model import BilresaWheel, SwitchEndpoint
+from custom_components.ikea_bilresa.panel_api import (
+    TYPE_ACTIVITY_SUBSCRIBE,
+    TYPE_BINDING_DELETE,
+    TYPE_BINDING_SAVE,
+    TYPE_BINDING_TEST,
+    TYPE_OVERVIEW,
+    TYPE_OVERVIEW_SUBSCRIBE,
+    TYPE_SETTINGS_SAVE,
+    async_register_commands,
+    ws_activity_subscribe,
+    ws_binding_delete,
+    ws_binding_save,
+    ws_overview,
+    ws_overview_subscribe,
+    ws_settings_save,
+)
+from custom_components.ikea_bilresa.panel_models import wheel_key
+
+NODE_A = 13
+SNAPSHOT = {
+    "wheels": [{"key": wheel_key(NODE_A), "name": "Wheel A"}],
+    "matter_connected": True,
+    "event_source": "core_matter_client",
+    "contract_version": 1,
+}
+
+
+def _hass(*, loaded: bool = True) -> SimpleNamespace:
+    entry = SimpleNamespace(runtime_data=SimpleNamespace())
+    return SimpleNamespace(
+        data={},
+        bus=SimpleNamespace(async_listen=MagicMock(return_value=MagicMock())),
+        config_entries=SimpleNamespace(
+            async_loaded_entries=lambda domain: (
+                [entry] if loaded and domain == DOMAIN else []
+            ),
+            async_add_subentry=MagicMock(),
+            async_update_subentry=MagicMock(),
+            async_remove_subentry=MagicMock(),
+        ),
+    )
+
+
+def _patch_snapshot(monkeypatch, snapshot=None) -> None:
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_overview_snapshot",
+        lambda _hass, _entry, _language=None: dict(
+            snapshot if snapshot is not None else SNAPSHOT
+        ),
+    )
+
+
+def _connection() -> MagicMock:
+    connection = MagicMock()
+    connection.subscriptions = {}
+    return connection
+
+
+# -- overview request ------------------------------------------------------
+
+
+def test_overview_returns_the_snapshot(monkeypatch) -> None:
+    _patch_snapshot(monkeypatch)
+    connection = _connection()
+
+    ws_overview(_hass(), connection, {"id": 1, "type": TYPE_OVERVIEW})
+
+    connection.send_result.assert_called_once_with(1, SNAPSHOT)
+
+
+def test_overview_while_unloaded_is_empty_not_an_error(monkeypatch) -> None:
+    """A browser can hold the sidebar open across an unload."""
+    _patch_snapshot(monkeypatch)
+    connection = _connection()
+
+    ws_overview(_hass(loaded=False), connection, {"id": 1, "type": TYPE_OVERVIEW})
+
+    result = connection.send_result.call_args.args[1]
+    assert result["wheels"] == []
+    assert result["matter_connected"] is False
+    assert result["event_source"] == "unloaded"
+
+
+# -- overview subscription -------------------------------------------------
+
+
+def test_overview_subscription_listens_to_both_signals(monkeypatch) -> None:
+    _patch_snapshot(monkeypatch)
+    signals = []
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_connect",
+        lambda _h, signal, _t: signals.append(signal) or MagicMock(),
+    )
+    connection = _connection()
+
+    ws_overview_subscribe(
+        _hass(), connection, {"id": 5, "type": TYPE_OVERVIEW_SUBSCRIBE}
+    )
+
+    assert set(signals) == {
+        SIGNAL_CONNECTION,
+        SIGNAL_WHEELS_UPDATED,
+        SIGNAL_BINDINGS_UPDATED,
+    }
+
+
+def test_overview_subscription_unwinds_every_listener(monkeypatch) -> None:
+    """Both dispatcher handles must go, not just the last one registered.
+
+    Two signals means two unsubscribes behind one subscription id. Leaking the
+    first one is silent: the socket closes, HA calls the handle it was given, and
+    a dead connection keeps receiving pushes for the other signal forever.
+    """
+    _patch_snapshot(monkeypatch)
+    handed_out: list[MagicMock] = []
+
+    def _connect(_hass, _signal, _target):
+        unsub = MagicMock()
+        handed_out.append(unsub)
+        return unsub
+
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_connect", _connect
+    )
+    connection = _connection()
+    ws_overview_subscribe(
+        _hass(), connection, {"id": 5, "type": TYPE_OVERVIEW_SUBSCRIBE}
+    )
+    assert len(handed_out) == 3
+
+    connection.subscriptions[5]()
+
+    for unsub in handed_out:
+        unsub.assert_called_once()
+
+
+def test_overview_subscription_pushes_on_signal(monkeypatch) -> None:
+    _patch_snapshot(monkeypatch)
+    captured = {}
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_connect",
+        lambda _h, signal, target: captured.setdefault(signal, target) or MagicMock(),
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.websocket_api.event_message",
+        lambda mid, payload: {"id": mid, "event": payload},
+    )
+    connection = _connection()
+    ws_overview_subscribe(
+        _hass(), connection, {"id": 5, "type": TYPE_OVERVIEW_SUBSCRIBE}
+    )
+
+    captured[SIGNAL_CONNECTION]()
+
+    connection.send_message.assert_called_once_with({"id": 5, "event": SNAPSHOT})
+
+
+def test_two_clients_get_independent_subscriptions(monkeypatch) -> None:
+    _patch_snapshot(monkeypatch)
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_connect",
+        lambda _h, _s, _t: MagicMock(),
+    )
+    hass = _hass()
+    first, second = _connection(), _connection()
+
+    ws_overview_subscribe(hass, first, {"id": 1, "type": TYPE_OVERVIEW_SUBSCRIBE})
+    ws_overview_subscribe(hass, second, {"id": 9, "type": TYPE_OVERVIEW_SUBSCRIBE})
+
+    assert 1 in first.subscriptions
+    assert 9 in second.subscriptions
+    assert first.subscriptions is not second.subscriptions
+
+
+# -- activity subscription -------------------------------------------------
+
+
+def _fire(hass, connection, monkeypatch, data) -> None:
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.websocket_api.event_message",
+        lambda mid, payload: {"id": mid, "event": payload},
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_connect",
+        lambda *_args: MagicMock(),
+    )
+    ws_activity_subscribe(hass, connection, {"id": 7, "type": TYPE_ACTIVITY_SUBSCRIBE})
+    forward = hass.bus.async_listen.call_args.args[1]
+    forward(SimpleNamespace(data=data))
+
+
+def test_activity_listens_to_the_public_bus_event(monkeypatch) -> None:
+    """Listening to the bus keeps the dispatch path untouched."""
+    hass, connection = _hass(), _connection()
+    _fire(
+        hass,
+        connection,
+        monkeypatch,
+        {
+            "node_id": NODE_A,
+            "channel": 1,
+            "type": "rotate",
+            "direction": "up",
+            "notches": 6,
+            "presses": 0,
+        },
+    )
+
+    assert hass.bus.async_listen.call_args.args[0] == EVENT_BILRESA
+    payload = connection.send_message.call_args.args[0]["event"]
+    assert payload["wheel"] == wheel_key(NODE_A)
+    assert payload["gesture"] == "rotate"
+    assert payload["notches"] == 6
+
+
+def test_activity_skips_the_intermediate_short_release(monkeypatch) -> None:
+    """short_release is a bus-only phase; the feed keeps completed gestures."""
+    hass, connection = _hass(), _connection()
+    _fire(
+        hass,
+        connection,
+        monkeypatch,
+        {"node_id": NODE_A, "channel": 1, "type": "short_release"},
+    )
+
+    connection.send_message.assert_not_called()
+
+
+def test_activity_forwards_only_safe_observed_duration(monkeypatch) -> None:
+    hass, connection = _hass(), _connection()
+    _fire(
+        hass,
+        connection,
+        monkeypatch,
+        {
+            "node_id": NODE_A,
+            "channel": 1,
+            "type": "release",
+            "observed_duration_ms": 2250,
+        },
+    )
+
+    payload = connection.send_message.call_args.args[0]["event"]
+    assert payload["observed_duration_ms"] == 2250
+
+
+def test_activity_strips_every_identifier(monkeypatch) -> None:
+    """The bus payload carries node_id, wheel_name and endpoint_id. None may pass."""
+    hass, connection = _hass(), _connection()
+    _fire(
+        hass,
+        connection,
+        monkeypatch,
+        {
+            "node_id": NODE_A,
+            "wheel_name": "BILRESA scroll wheel",
+            "endpoint_id": 3,
+            "channel": 1,
+            "type": "press",
+            "presses": 1,
+        },
+    )
+
+    payload = connection.send_message.call_args.args[0]["event"]
+    rendered = str(payload)
+    assert "node_id" not in payload
+    assert "wheel_name" not in payload
+    assert "endpoint_id" not in payload
+    assert "BILRESA scroll wheel" not in rendered
+    assert str(NODE_A) not in rendered.replace(wheel_key(NODE_A), "")
+
+
+def test_dual_button_activity_exposes_safe_button_number_only(monkeypatch) -> None:
+    hass, _entry = _mutation_hass(dual_button=True)
+    connection = _connection()
+    _fire(
+        hass,
+        connection,
+        monkeypatch,
+        {
+            "node_id": NODE_A,
+            "endpoint_id": 2,
+            "channel": None,
+            "type": "press",
+            "presses": 2,
+        },
+    )
+
+    payload = connection.send_message.call_args.args[0]["event"]
+    assert payload["button"] == 2
+    assert payload["channel"] is None
+    assert payload["gesture"] == "press"
+    assert payload["presses"] == 2
+    assert "endpoint_id" not in payload
+
+
+def test_activity_reports_gap_2_and_3_as_absent_not_healthy(monkeypatch) -> None:
+    """No source exists for either. Null is the honest answer, not a guess."""
+    hass, connection = _hass(), _connection()
+    _fire(
+        hass,
+        connection,
+        monkeypatch,
+        {"node_id": NODE_A, "channel": 1, "type": "press", "presses": 1},
+    )
+
+    payload = connection.send_message.call_args.args[0]["event"]
+    assert payload["result"] is None
+    assert payload["dispatched"] is None
+
+
+def test_activity_ignores_a_malformed_event(monkeypatch) -> None:
+    """A bus event without an int node_id cannot be attributed to a wheel."""
+    hass, connection = _hass(), _connection()
+    _fire(hass, connection, monkeypatch, {"channel": 1, "type": "rotate"})
+
+    connection.send_message.assert_not_called()
+
+
+def test_activity_subscription_unwinds_bus_and_binding_listener(monkeypatch) -> None:
+    hass, connection = _hass(), _connection()
+    bus_handle = MagicMock()
+    binding_handle = MagicMock()
+    hass.bus.async_listen.return_value = bus_handle
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_connect",
+        lambda *_args: binding_handle,
+    )
+
+    ws_activity_subscribe(hass, connection, {"id": 7, "type": TYPE_ACTIVITY_SUBSCRIBE})
+
+    connection.subscriptions[7]()
+    bus_handle.assert_called_once()
+    binding_handle.assert_called_once()
+
+
+# -- registration ----------------------------------------------------------
+
+
+def test_commands_register_once(monkeypatch) -> None:
+    """Global, and HA has no unregister API — a reload must not replace them."""
+    register = MagicMock()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.websocket_api.async_register_command",
+        register,
+    )
+    hass = _hass()
+
+    async_register_commands(hass)
+    async_register_commands(hass)
+
+    assert register.call_count == 8
+
+
+def test_write_surface_is_limited_to_binding_mutations_and_tests() -> None:
+    """The panel must not gain arbitrary config-entry or Matter mutation.
+
+    `ws_trace` is on this list deliberately. It writes, but only to an
+    in-memory diagnostic buffer: it cannot change a binding, a config entry, a
+    Matter device or any entity, and its rows carry nothing that diagnostics
+    does not already redact.
+
+    `ws_settings_save` is on it for a narrower reason: it writes exactly one
+    `wheel_settings` subentry, for a wheel that currently exists, with four
+    validated fields. It cannot create a binding, touch another subentry type,
+    or reach a Matter device.
+    """
+    import custom_components.ikea_bilresa.panel_api as api
+
+    exported = {name for name in dir(api) if name.startswith("ws_")}
+    assert exported == {
+        "ws_activity_subscribe",
+        "ws_binding_delete",
+        "ws_binding_save",
+        "ws_binding_test",
+        "ws_overview",
+        "ws_overview_subscribe",
+        "ws_settings_save",
+        "ws_trace",
+    }
+
+
+def _mutation_hass(subentries=None, *, dual_button: bool = False):
+    wheel = BilresaWheel(
+        node_id=NODE_A,
+        name="Dual button" if dual_button else "Wheel",
+        product_name="BILRESA",
+        serial=None,
+        endpoints=(
+            {
+                1: SwitchEndpoint(1, None, "button", multi_press_max=2),
+                2: SwitchEndpoint(2, None, "button", multi_press_max=2),
+            }
+            if dual_button
+            else {
+                1: SwitchEndpoint(1, 1, "scroll_up"),
+                2: SwitchEndpoint(2, 1, "scroll_down"),
+                3: SwitchEndpoint(3, 1, "button"),
+            }
+        ),
+    )
+    entry = SimpleNamespace(
+        subentries=subentries or {},
+        runtime_data=SimpleNamespace(
+            wheels={NODE_A: wheel},
+            connected=True,
+            event_source="core_matter_client",
+            wheel_settings={},
+            settings_for=lambda _node_id: DEFAULT_SETTINGS,
+            async_setup_settings=MagicMock(),
+        ),
+    )
+    hass = _hass()
+    hass.config = SimpleNamespace(language="en")
+    hass.config_entries.async_loaded_entries = lambda domain: (
+        [entry] if domain == DOMAIN else []
+    )
+    return hass, entry
+
+
+def _stored_binding(revision_data=None):
+    return SimpleNamespace(
+        subentry_id="binding-1",
+        subentry_type=SUBENTRY_BINDING,
+        title="Wheel · Channel 1",
+        unique_id=None,
+        data={
+            CONF_NODE_ID: str(NODE_A),
+            CONF_CHANNEL: "1",
+            CONF_TARGET: "light.office",
+            CONF_MODE: "brightness",
+            **(revision_data or {}),
+        },
+    )
+
+
+def _stored_button_binding(endpoint: int = 1):
+    return SimpleNamespace(
+        subentry_id=f"button-binding-{endpoint}",
+        subentry_type=SUBENTRY_BINDING,
+        title=f"Dual button · BTN {endpoint}",
+        unique_id=None,
+        data={
+            CONF_NODE_ID: str(NODE_A),
+            CONF_ENDPOINT: str(endpoint),
+            CONF_CLICK_ACTION: "toggle",
+            CONF_CLICK_TARGET: f"light.button_{endpoint}",
+            CONF_HOLD_ACTION: "none",
+        },
+    )
+
+
+def test_binding_save_rejects_stale_revision(monkeypatch) -> None:
+    subentry = _stored_binding()
+    hass, _entry = _mutation_hass({subentry.subentry_id: subentry})
+    connection = _connection()
+
+    ws_binding_save(
+        hass,
+        connection,
+        {
+            "id": 20,
+            "type": TYPE_BINDING_SAVE,
+            "wheel": wheel_key(NODE_A),
+            "channel": 1,
+            "binding_id": subentry.subentry_id,
+            "expected_revision": "stale",
+            "data": {CONF_TARGET: "light.office", CONF_MODE: "brightness"},
+        },
+    )
+
+    result = connection.send_result.call_args.args[1]
+    assert result["ok"] is False
+    assert result["error"] == "conflict"
+    hass.config_entries.async_update_subentry.assert_not_called()
+
+
+def test_binding_save_creates_only_normalized_subentry(monkeypatch) -> None:
+    hass, _entry = _mutation_hass()
+    connection = _connection()
+    created = {}
+
+    def _subentry(**kwargs):
+        item = SimpleNamespace(subentry_id="new", **kwargs)
+        created["item"] = item
+        return item
+
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.ConfigSubentry", _subentry
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api._binding_title",
+        lambda *_args, **_kwargs: "Wheel · Channel 1",
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_send", MagicMock()
+    )
+
+    ws_binding_save(
+        hass,
+        connection,
+        {
+            "id": 21,
+            "type": TYPE_BINDING_SAVE,
+            "wheel": wheel_key(NODE_A),
+            "channel": 1,
+            "data": {
+                CONF_TARGET: "light.office",
+                CONF_MODE: "brightness",
+            },
+        },
+    )
+
+    result = connection.send_result.call_args.args[1]
+    assert result["ok"] is True
+    assert dict(created["item"].data)[CONF_NODE_ID] == str(NODE_A)
+    assert dict(created["item"].data)[CONF_CHANNEL] == "1"
+    hass.config_entries.async_add_subentry.assert_called_once()
+
+
+def test_button_save_maps_display_number_to_endpoint_without_leaking_it(
+    monkeypatch,
+) -> None:
+    hass, _entry = _mutation_hass(dual_button=True)
+    connection = _connection()
+    created = {}
+
+    def _subentry(**kwargs):
+        item = SimpleNamespace(subentry_id="new-button", **kwargs)
+        created["item"] = item
+        return item
+
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.ConfigSubentry", _subentry
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api._binding_title",
+        lambda *_args, **_kwargs: "Dual button · BTN 2",
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_send", MagicMock()
+    )
+
+    ws_binding_save(
+        hass,
+        connection,
+        {
+            "id": 23,
+            "type": TYPE_BINDING_SAVE,
+            "wheel": wheel_key(NODE_A),
+            "button": 2,
+            "data": {
+                CONF_CLICK_ACTION: "toggle",
+                CONF_CLICK_TARGET: "light.second",
+                CONF_HOLD_ACTION: "none",
+            },
+        },
+    )
+
+    result = connection.send_result.call_args.args[1]
+    assert result["ok"] is True
+    assert dict(created["item"].data)[CONF_ENDPOINT] == "2"
+    assert CONF_ENDPOINT not in result["binding"]["data"]
+    assert CONF_CHANNEL not in dict(created["item"].data)
+
+
+def test_button_save_rejects_channel_shaped_request() -> None:
+    hass, _entry = _mutation_hass(dual_button=True)
+    connection = _connection()
+
+    ws_binding_save(
+        hass,
+        connection,
+        {
+            "id": 24,
+            "type": TYPE_BINDING_SAVE,
+            "wheel": wheel_key(NODE_A),
+            "channel": 1,
+            "data": {},
+        },
+    )
+
+    result = connection.send_result.call_args.args[1]
+    assert result == {"ok": False, "error": "control_mismatch"}
+    hass.config_entries.async_add_subentry.assert_not_called()
+
+
+def test_button_save_reports_button_occupied() -> None:
+    subentry = _stored_button_binding(1)
+    hass, _entry = _mutation_hass({subentry.subentry_id: subentry}, dual_button=True)
+    connection = _connection()
+
+    ws_binding_save(
+        hass,
+        connection,
+        {
+            "id": 25,
+            "type": TYPE_BINDING_SAVE,
+            "wheel": wheel_key(NODE_A),
+            "button": 1,
+            "data": {
+                CONF_CLICK_ACTION: "toggle",
+                CONF_CLICK_TARGET: "light.other",
+                CONF_HOLD_ACTION: "none",
+            },
+        },
+    )
+
+    result = connection.send_result.call_args.args[1]
+    assert result["ok"] is False
+    assert result["error"] == "button_occupied"
+    assert CONF_ENDPOINT not in result["binding"]["data"]
+    hass.config_entries.async_add_subentry.assert_not_called()
+
+
+def test_binding_delete_requires_latest_revision() -> None:
+    subentry = _stored_binding()
+    hass, _entry = _mutation_hass({subentry.subentry_id: subentry})
+    connection = _connection()
+
+    ws_binding_delete(
+        hass,
+        connection,
+        {
+            "id": 22,
+            "type": TYPE_BINDING_DELETE,
+            "binding_id": subentry.subentry_id,
+            "expected_revision": "stale",
+        },
+    )
+
+    assert connection.send_result.call_args.args[1]["error"] == "conflict"
+    hass.config_entries.async_remove_subentry.assert_not_called()
+
+
+def test_binding_test_command_is_registered() -> None:
+    assert TYPE_BINDING_TEST.endswith("/binding/test")
+
+
+# -- per-wheel settings ----------------------------------------------------
+
+
+def _stored_settings(**data):
+    return SimpleNamespace(
+        subentry_id="settings-1",
+        subentry_type=SUBENTRY_WHEEL,
+        title="Wheel · settings",
+        unique_id=f"{NODE_A}:settings",
+        data={
+            CONF_NODE_ID: NODE_A,
+            CONF_CHANNEL_ENABLED: {"1": True},
+            CONF_STEP: 2.0,
+            CONF_ACCELERATION: 0.0,
+            **data,
+        },
+    )
+
+
+def _save_settings(hass, connection, monkeypatch, **overrides):
+    _patch_snapshot(monkeypatch)
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_send", MagicMock()
+    )
+    msg = {
+        "id": 30,
+        "type": TYPE_SETTINGS_SAVE,
+        "wheel": wheel_key(NODE_A),
+        "channel_enabled": {"1": False},
+        "step": 2.0,
+        "acceleration": 0.0,
+    }
+    msg.update(overrides)
+    ws_settings_save(hass, connection, msg)
+    return connection.send_result.call_args.args[1]
+
+
+def test_first_save_creates_the_settings_subentry(monkeypatch) -> None:
+    hass, entry = _mutation_hass()
+    connection = _connection()
+
+    result = _save_settings(hass, connection, monkeypatch)
+
+    assert result["ok"] is True
+    created = hass.config_entries.async_add_subentry.call_args.args[1]
+    assert created.subentry_type == SUBENTRY_WHEEL
+    assert created.data[CONF_CHANNEL_ENABLED] == {"1": False}
+    assert created.data[CONF_NODE_ID] == NODE_A
+    # Applied in place, so disabling a channel needs no reload.
+    entry.runtime_data.async_setup_settings.assert_called_once_with(entry)
+
+
+def test_saving_settings_never_creates_a_binding(monkeypatch) -> None:
+    """The write surface stays narrow: one subentry type, nothing else."""
+    hass, _entry = _mutation_hass()
+    connection = _connection()
+
+    _save_settings(hass, connection, monkeypatch)
+
+    created = hass.config_entries.async_add_subentry.call_args.args[1]
+    assert created.subentry_type != SUBENTRY_BINDING
+    hass.config_entries.async_remove_subentry.assert_not_called()
+
+
+def test_a_channel_the_device_does_not_report_is_rejected(monkeypatch) -> None:
+    """The wheel in this harness has channel 1 only."""
+    hass, _entry = _mutation_hass()
+    connection = _connection()
+
+    result = _save_settings(hass, connection, monkeypatch, channel_enabled={"7": False})
+
+    assert result == {"ok": False, "error": "control_missing"}
+    hass.config_entries.async_add_subentry.assert_not_called()
+
+
+def test_a_dual_button_has_no_channels_to_configure(monkeypatch) -> None:
+    hass, _entry = _mutation_hass(dual_button=True)
+    connection = _connection()
+
+    result = _save_settings(hass, connection, monkeypatch)
+
+    assert result == {"ok": False, "error": "control_mismatch"}
+    hass.config_entries.async_add_subentry.assert_not_called()
+
+
+def test_an_unknown_wheel_is_rejected(monkeypatch) -> None:
+    hass, _entry = _mutation_hass()
+    connection = _connection()
+
+    result = _save_settings(hass, connection, monkeypatch, wheel="not-a-wheel")
+
+    assert result == {"ok": False, "error": "wheel_missing"}
+
+
+def test_saving_settings_while_unloaded_is_refused(monkeypatch) -> None:
+    connection = _connection()
+    _patch_snapshot(monkeypatch)
+
+    ws_settings_save(
+        _hass(loaded=False),
+        connection,
+        {
+            "id": 31,
+            "type": TYPE_SETTINGS_SAVE,
+            "wheel": wheel_key(NODE_A),
+            "channel_enabled": {"1": False},
+            "step": 2.0,
+            "acceleration": 0.0,
+        },
+    )
+
+    assert connection.send_result.call_args.args[1] == {
+        "ok": False,
+        "error": "unloaded",
+    }
+
+
+def test_a_stale_revision_loses_to_the_stored_settings(monkeypatch) -> None:
+    """Two open panels must not silently overwrite each other."""
+    subentry = _stored_settings()
+    hass, _entry = _mutation_hass({subentry.subentry_id: subentry})
+    connection = _connection()
+
+    result = _save_settings(hass, connection, monkeypatch, expected_revision="stale")
+
+    assert result["ok"] is False
+    assert result["error"] == "conflict"
+    hass.config_entries.async_update_subentry.assert_not_called()
+
+
+def _record_languages(monkeypatch) -> list:
+    seen: list = []
+
+    def snapshot(_hass, _entry, language=None):
+        seen.append(language)
+        return dict(SNAPSHOT)
+
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_overview_snapshot", snapshot
+    )
+    return seen
+
+
+def test_overview_is_built_in_the_language_the_panel_asks_for(monkeypatch) -> None:
+    """A user who chose English sees English, whatever the instance speaks."""
+    seen = _record_languages(monkeypatch)
+
+    ws_overview(
+        _hass(), _connection(), {"id": 1, "type": TYPE_OVERVIEW, "language": "en"}
+    )
+    # An older panel script sends no language: the instance language applies.
+    ws_overview(_hass(), _connection(), {"id": 2, "type": TYPE_OVERVIEW})
+
+    assert seen == ["en", None]
+
+
+def test_every_push_of_a_subscription_keeps_its_language(monkeypatch) -> None:
+    seen = _record_languages(monkeypatch)
+    captured = {}
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_connect",
+        lambda _h, signal, target: captured.setdefault(signal, target) or MagicMock(),
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.websocket_api.event_message",
+        lambda mid, payload: {"id": mid, "event": payload},
+    )
+
+    ws_overview_subscribe(
+        _hass(),
+        _connection(),
+        {"id": 5, "type": TYPE_OVERVIEW_SUBSCRIBE, "language": "en"},
+    )
+    captured[SIGNAL_CONNECTION]()
+
+    assert seen == ["en", "en"]
+
+
+_ACTIONS = [{"action": "light.toggle", "target": {"entity_id": "light.office"}}]
+
+
+def _save_with_actions(monkeypatch, data: dict) -> tuple[dict, dict]:
+    hass, _entry = _mutation_hass()
+    connection = _connection()
+    created = {}
+
+    def _subentry(**kwargs):
+        item = SimpleNamespace(subentry_id="new", **kwargs)
+        created["item"] = item
+        return item
+
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.ConfigSubentry", _subentry
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api._binding_title",
+        lambda *_args, **_kwargs: "Wheel · Channel 1",
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_dispatcher_send", MagicMock()
+    )
+    ws_binding_save(
+        hass,
+        connection,
+        {
+            "id": 22,
+            "type": TYPE_BINDING_SAVE,
+            "wheel": wheel_key(NODE_A),
+            "channel": 1,
+            "data": {CONF_TARGET: "light.office", CONF_MODE: "brightness", **data},
+        },
+    )
+    return connection.send_result.call_args.args[1], created
+
+
+def test_the_panel_saves_the_actions_a_gesture_runs_and_sends_them_back(
+    monkeypatch,
+) -> None:
+    result, created = _save_with_actions(
+        monkeypatch,
+        {"double_press_action": "run", "double_press_sequence": _ACTIONS},
+    )
+
+    assert result["ok"] is True
+    assert dict(created["item"].data)["double_press_sequence"] == _ACTIONS
+    assert result["binding"]["data"]["double_press_sequence"] == _ACTIONS
+
+
+def test_the_panel_refuses_a_gesture_set_to_run_without_actions(monkeypatch) -> None:
+    result, created = _save_with_actions(monkeypatch, {"double_press_action": "run"})
+
+    assert result["ok"] is False
+    assert result["fields"] == {"double_press_action": "actions_required"}
+    assert "item" not in created
+
+
+def test_the_panel_refuses_an_action_sequence_that_is_not_valid(monkeypatch) -> None:
+    result, created = _save_with_actions(
+        monkeypatch,
+        {"double_press_action": "run", "double_press_sequence": [{"nope": 1}]},
+    )
+
+    assert result["ok"] is False
+    assert "item" not in created

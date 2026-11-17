@@ -1,0 +1,406 @@
+"""Constants for the IKEA BILRESA (smooth scroll) integration."""
+
+from __future__ import annotations
+
+from typing import Any
+
+from .gesture_verbs import ACTION_RUN, ACTS_WHILE_UNKNOWN, ALL_VERBS
+from .gesture_verbs import TARGET_DOMAINS as _GESTURE_TARGET_DOMAINS
+
+DOMAIN = "ikea_bilresa"
+
+# Default Matter Server (add-on) WebSocket URL. Overridden by the URL taken
+# from the core `matter` config entry when one is available.
+DEFAULT_MATTER_URL = "ws://core-matter-server:5580/ws"
+
+CONF_URL = "url"
+
+# --- Matter cluster / attribute ids -------------------------------------
+CLUSTER_SWITCH = 0x003B  # 59  Switch cluster
+CLUSTER_DESCRIPTOR = 0x001D  # 29  Descriptor cluster
+CLUSTER_BASIC_INFO = 0x0028  # 40  Basic Information cluster
+
+ATTR_DESCRIPTOR_PARTS_LIST = 3  # Descriptor.PartsList
+ATTR_DESCRIPTOR_TAGLIST = 4  # Descriptor.TagList
+ATTR_BASIC_VENDOR_NAME = 1
+ATTR_BASIC_VENDOR_ID = 2
+ATTR_BASIC_PRODUCT_NAME = 3
+
+# Switch cluster attribute (cluster 0x003B). MultiPressMax is the highest press
+# count the endpoint will ever report; the dual button reports 2, the wheel's
+# buttons report 3. An endpoint never emits a completion above this value.
+ATTR_SWITCH_CURRENT_POSITION = 0  # 0x0000  Switch.CurrentPosition
+ATTR_SWITCH_MULTI_PRESS_MAX = 2  # 0x0002  Switch.MultiPressMax
+
+IKEA_VENDOR_ID = 4476  # 0x117C
+BILRESA_PRODUCT_MATCH = "bilresa"
+
+# --- Semantic tag namespaces (Matter "Common" namespaces) ---------------
+NS_SWITCHES = 0x43  # 67  Common Switches namespace
+
+# Switches namespace tags
+SWTAG_ON = 0x00
+SWTAG_OFF = 0x01
+SWTAG_TOGGLE = 0x02
+SWTAG_UP = 0x03
+SWTAG_DOWN = 0x04
+SWTAG_NEXT = 0x05
+SWTAG_PREVIOUS = 0x06
+SWTAG_ENTER_OK = 0x07
+SWTAG_CUSTOM = 0x08
+
+# TagList entry keys (as delivered by the Matter Server, TLV field numbers)
+TAG_KEY_NAMESPACE = "1"  # NamespaceID
+TAG_KEY_TAG = "2"  # Tag
+TAG_KEY_LABEL = "3"  # Label (optional, human string)
+
+# --- Switch cluster events (cluster 0x003B) -----------------------------
+EVT_SWITCH_LATCHED = 0x00
+EVT_INITIAL_PRESS = 0x01
+EVT_LONG_PRESS = 0x02
+EVT_SHORT_RELEASE = 0x03
+EVT_LONG_RELEASE = 0x04
+EVT_MULTI_PRESS_ONGOING = 0x05
+EVT_MULTI_PRESS_COMPLETE = 0x06
+
+SWITCH_EVENT_NAMES = {
+    EVT_SWITCH_LATCHED: "switch_latched",
+    EVT_INITIAL_PRESS: "initial_press",
+    EVT_LONG_PRESS: "long_press",
+    EVT_SHORT_RELEASE: "short_release",
+    EVT_LONG_RELEASE: "long_release",
+    EVT_MULTI_PRESS_ONGOING: "multi_press_ongoing",
+    EVT_MULTI_PRESS_COMPLETE: "multi_press_complete",
+}
+
+# Roles a switch endpoint can play on the wheel
+ROLE_SCROLL_UP = "scroll_up"
+ROLE_SCROLL_DOWN = "scroll_down"
+ROLE_BUTTON = "button"
+
+# Device variants, distinguished by endpoint shape rather than product code.
+# A scroll wheel groups its switch endpoints under numeric channel labels. The
+# dual button (E2489) has exactly two switch endpoints without channel labels;
+# their semantic tags are up/down even though both are physical buttons.
+# Matching on shape, not on the "BILRESA" product string, keeps discovery
+# descriptor-driven. See docs/ROADMAP_BUTTON.md.
+VARIANT_WHEEL = "wheel"
+VARIANT_DUAL_BUTTON = "dual_button"
+
+# HA event-bus event fired for every decoded wheel action
+EVENT_BILRESA = "ikea_bilresa_event"
+
+# Data keys inside a Matter switch event payload (camelCase, as delivered by
+# the Matter Server). To be re-confirmed against live device logs in phase 1.
+DATA_NEW_POSITION = "newPosition"
+DATA_PREVIOUS_POSITION = "previousPosition"
+DATA_CURRENT_COUNT = "currentNumberOfPressesCounted"
+DATA_TOTAL_COUNT = "totalNumberOfPressesCounted"
+
+# --- Clean, high-level actions (emitted by the gesture engine) ----------
+ACTION_ROTATE = "rotate"
+ACTION_PRESS = "press"
+ACTION_HOLD = "hold"
+ACTION_RELEASE = "release"
+ACTION_SHORT_RELEASE = "short_release"
+
+DIRECTION_UP = "up"
+DIRECTION_DOWN = "down"
+
+# --- event entity event_types (one entity per wheel channel) ------------
+ET_ROTATE_UP = "rotate_up"
+ET_ROTATE_DOWN = "rotate_down"
+ET_PRESS = "press"
+ET_DOUBLE_PRESS = "double_press"
+ET_TRIPLE_PRESS = "triple_press"
+ET_HOLD = "hold"
+ET_RELEASE = "release"
+
+WHEEL_EVENT_TYPES = [
+    ET_ROTATE_UP,
+    ET_ROTATE_DOWN,
+    ET_PRESS,
+    ET_DOUBLE_PRESS,
+    ET_TRIPLE_PRESS,
+    ET_HOLD,
+    ET_RELEASE,
+]
+
+PRESS_EVENT_TYPES = {1: ET_PRESS, 2: ET_DOUBLE_PRESS, 3: ET_TRIPLE_PRESS}
+
+
+def button_event_types(multi_press_max: int | None) -> list[str]:
+    """Event types a button endpoint advertises, capped by its MultiPressMax.
+
+    A device that never emits a triple press (the dual button, MultiPressMax 2)
+    must not advertise one — an automation offering a trigger the device cannot
+    fire is a lie. When the max is unknown, expose single + double (the dual
+    button's shape) but not triple. Rotation is deliberately absent: a button is
+    not a wheel channel.
+    """
+    types = [ET_PRESS]
+    if multi_press_max is None or multi_press_max >= 2:
+        types.append(ET_DOUBLE_PRESS)
+    if multi_press_max is not None and multi_press_max >= 3:
+        types.append(ET_TRIPLE_PRESS)
+    types.extend([ET_HOLD, ET_RELEASE])
+    return types
+
+
+# --- config subentries (GUI light bindings) -----------------------------
+SUBENTRY_BINDING = "binding"
+
+# --- config subentries (per-wheel channel settings) ---------------------
+# Storage only. Unlike bindings there is no config-flow handler: these are
+# edited from the panel, so the subentry exists purely to persist them.
+SUBENTRY_WHEEL = "wheel_settings"
+
+CONF_CHANNEL_ENABLED = "channel_enabled"
+
+# Per-channel 1-100 dials moved by scrolling. `CONF_STEP` and
+# `CONF_ACCELERATION` are reused, so a dial reads the same as a binding.
+DIAL_MIN = 1.0
+DIAL_MAX = 100.0
+DIAL_DEFAULT = 50.0
+DEFAULT_DIAL_STEP = 2
+
+CONF_NODE_ID = "node_id"
+CONF_CHANNEL = "channel"
+CONF_ENDPOINT = "endpoint"
+CONF_TARGET = "target"
+CONF_FOLLOWER = "follower_light"
+CONF_FOLLOWER_OFFSET = "follower_offset"
+CONF_FOLLOWER_MIN = "follower_min"
+CONF_MODE = "mode"
+CONF_STEP = "step"
+CONF_ACCELERATION = "acceleration"
+CONF_MIN_BRIGHTNESS = "min_brightness"
+CONF_MAX_BRIGHTNESS = "max_brightness"
+CONF_TRANSITION = "transition"
+CONF_CLICK_ACTION = "click_action"
+CONF_BUTTON_RESPONSE = "button_response"
+CONF_CLICK_TARGET = "click_target"
+CONF_DOUBLE_TARGET = "double_press_target"
+CONF_TRIPLE_TARGET = "triple_press_target"
+CONF_HOLD_TARGET = "hold_target"
+# What a double press, a triple press and a hold do to their target. A missing
+# value means "toggle", which is what they always did before the choice existed.
+CONF_DOUBLE_ACTION = "double_press_action"
+CONF_TRIPLE_ACTION = "triple_press_action"
+CONF_HOLD_TARGET_ACTION = "hold_target_action"
+CONF_HOLD_ACTION = "hold_action"
+# The actions of a gesture set to "run": a Home Assistant action sequence, as in
+# an automation, stored as the editor wrote it.
+CONF_CLICK_SEQUENCE = "click_sequence"
+CONF_DOUBLE_SEQUENCE = "double_press_sequence"
+CONF_TRIPLE_SEQUENCE = "triple_press_sequence"
+CONF_HOLD_SEQUENCE = "hold_sequence"
+CONF_RAMP_DIRECTION = "ramp_direction"
+CONF_SCENES = "scenes"
+
+# Flow-only convenience fields used when creating a binding.
+CONF_BINDING_PROFILE = "binding_profile"
+CONF_COPY_FROM = "copy_from"
+BINDING_PROFILE_CUSTOM = "custom"
+BINDING_PROFILE_LIGHT = "light"
+BINDING_PROFILE_MEDIA = "media"
+BINDING_PROFILE_COVER = "cover"
+BINDING_PROFILE_CLIMATE = "climate"
+BINDING_PROFILE_SCENES = "scenes"
+BINDING_PROFILES = [
+    BINDING_PROFILE_CUSTOM,
+    BINDING_PROFILE_LIGHT,
+    BINDING_PROFILE_MEDIA,
+    BINDING_PROFILE_COVER,
+    BINDING_PROFILE_CLIMATE,
+    BINDING_PROFILE_SCENES,
+]
+
+# What holding the button does.
+HOLD_TOGGLE = "toggle"  # toggle the hold target entity (default)
+HOLD_RAMP = "ramp"  # continuously ramp the scroll target while held
+HOLD_NONE = "none"
+HOLD_RUN = "run"  # run the hold sequence instead of acting on a target
+HOLD_ACTIONS = [HOLD_TOGGLE, HOLD_RAMP, HOLD_NONE, HOLD_RUN]
+DEFAULT_HOLD_ACTION = HOLD_TOGGLE
+
+# A dual-button hold ramp may alternate like the historic wheel behavior or
+# take a fixed role so two endpoints form a software dimmer pair.
+RAMP_DIRECTION_ALTERNATE = "alternate"
+RAMP_DIRECTION_UP = "up"
+RAMP_DIRECTION_DOWN = "down"
+RAMP_DIRECTIONS = [
+    RAMP_DIRECTION_ALTERNATE,
+    RAMP_DIRECTION_UP,
+    RAMP_DIRECTION_DOWN,
+]
+DEFAULT_RAMP_DIRECTION = RAMP_DIRECTION_ALTERNATE
+
+# Where a notch lands on the brightness range. `linear` is the historic
+# behaviour and stays the default: turning it on by default would break every
+# lamp that already applies its own dimming curve, and nothing here can tell
+# which ones those are without a light meter. Brightness only — no measurement
+# exists for volume, covers, fans or numbers, so they keep the linear step.
+CONF_STEP_CURVE = "step_curve"
+STEP_CURVE_LINEAR = "linear"
+STEP_CURVE_PERCEPTUAL = "perceptual"
+STEP_CURVES = [STEP_CURVE_LINEAR, STEP_CURVE_PERCEPTUAL]
+DEFAULT_STEP_CURVE = STEP_CURVE_LINEAR
+
+DEFAULT_STEP = 3
+DEFAULT_ACCELERATION = 0
+DEFAULT_MIN_BRIGHTNESS = 1
+DEFAULT_MAX_BRIGHTNESS = 100
+DEFAULT_TRANSITION = 1.0
+DEFAULT_CLICK_ACTION = "toggle"
+
+# When the configured single-press action runs.  Missing values intentionally
+# keep the historic completion-aware behavior for existing stored bindings.
+BUTTON_RESPONSE_INSTANT = "instant"
+BUTTON_RESPONSE_FAST = "fast"
+BUTTON_RESPONSE_MULTI_PRESS = "multi_press"
+BUTTON_RESPONSES = [
+    BUTTON_RESPONSE_INSTANT,
+    BUTTON_RESPONSE_FAST,
+    BUTTON_RESPONSE_MULTI_PRESS,
+]
+DEFAULT_BUTTON_RESPONSE = BUTTON_RESPONSE_MULTI_PRESS
+
+# Scroll modes: what a rotation changes on the target entity.
+MODE_BRIGHTNESS = "brightness"
+MODE_COLOR_TEMP = "color_temp"
+MODE_COLOR = "color"
+MODE_VOLUME = "volume"
+MODE_COVER = "cover_position"
+MODE_TEMPERATURE = "temperature"
+MODE_FAN = "fan_speed"
+MODE_NUMBER = "number"
+MODES = [
+    MODE_BRIGHTNESS,
+    MODE_COLOR_TEMP,
+    MODE_COLOR,
+    MODE_VOLUME,
+    MODE_COVER,
+    MODE_TEMPERATURE,
+    MODE_FAN,
+    MODE_NUMBER,
+]
+DEFAULT_MODE = MODE_BRIGHTNESS
+
+MODE_TARGET_DOMAINS = {
+    MODE_BRIGHTNESS: frozenset({"light"}),
+    MODE_COLOR_TEMP: frozenset({"light"}),
+    MODE_COLOR: frozenset({"light"}),
+    MODE_VOLUME: frozenset({"media_player"}),
+    MODE_COVER: frozenset({"cover"}),
+    MODE_TEMPERATURE: frozenset({"climate"}),
+    MODE_FAN: frozenset({"fan"}),
+    MODE_NUMBER: frozenset({"number", "input_number"}),
+}
+
+
+def mode_supports_target(mode: str, entity_id: str) -> bool:
+    """Return whether a scroll mode supports the target entity domain."""
+    domain, separator, _object_id = entity_id.partition(".")
+    return bool(separator and domain in MODE_TARGET_DOMAINS.get(mode, frozenset()))
+
+
+# Modes in which one binding may drive several lights at once. Every member
+# receives the same value from one tracked target, so only modes whose value
+# means the same thing on every light qualify.
+MULTI_TARGET_MODES = (MODE_BRIGHTNESS, MODE_COLOR_TEMP, MODE_COLOR)
+# Bounded so a single service call stays reasonable for any light integration.
+MAX_BINDING_TARGETS = 20
+
+
+def binding_targets(value: Any) -> list[str]:
+    """Return a stored rotation target as an ordered, de-duplicated list.
+
+    A binding with one target stores it as a plain string — every binding made
+    before multi-light support, and every single-light binding since. Several
+    targets are stored as a list. Every reader goes through this function so
+    the two shapes can never be handled differently.
+    """
+    if not value:
+        return []
+    items = [value] if isinstance(value, str) else list(value)
+    return list(dict.fromkeys(str(item) for item in items if item))
+
+
+# Entity domains a binding can target (its scroll control adapts to the mode).
+TARGET_DOMAINS = [
+    "light",
+    "media_player",
+    "cover",
+    "climate",
+    "fan",
+    "number",
+    "input_number",
+]
+
+CLICK_TOGGLE = "toggle"
+CLICK_ON = "on"
+CLICK_OFF = "off"
+CLICK_NONE = "none"
+# The verbs a gesture can carry out on its target, from the table in
+# ``gesture_verbs``, and "run", which runs the gesture's action sequence
+# instead of acting on a target; "none" is no gesture at all.
+TARGET_ACTIONS = [*ALL_VERBS, ACTION_RUN]
+CLICK_ACTIONS = [*TARGET_ACTIONS, CLICK_NONE]
+DEFAULT_TARGET_ACTION = CLICK_TOGGLE
+
+# Entity domains a press, double press, triple press or hold may act on, and
+# what each can do: see ``gesture_verbs``.
+PRESS_TARGET_DOMAINS = _GESTURE_TARGET_DOMAINS
+# Entities whose state is not an on/off answer: a scene reports when it was last
+# activated (``unknown`` before the first time) and a script is idle or running.
+RUN_TARGET_DOMAINS = ("script", "scene")
+
+
+def is_run_target(entity_id: str | None) -> bool:
+    """Whether this entity is a scene or a script."""
+    if not entity_id:
+        return False
+    return entity_id.split(".", 1)[0] in RUN_TARGET_DOMAINS
+
+
+def acts_while_unknown(entity_id: str | None) -> bool:
+    """Whether a press may act on this entity while its state is ``unknown``."""
+    if not entity_id:
+        return False
+    return entity_id.split(".", 1)[0] in ACTS_WHILE_UNKNOWN
+
+
+def is_scene_target(entity_id: str | None) -> bool:
+    """Whether this entity is a scene, which can only be run."""
+    return bool(entity_id) and str(entity_id).startswith("scene.")
+
+
+# Sensible fallback white-temperature range (Kelvin) if a light doesn't report it.
+FALLBACK_MIN_KELVIN = 2000
+FALLBACK_MAX_KELVIN = 6500
+
+# --- dispatcher signals -------------------------------------------------
+SIGNAL_WHEELS_UPDATED = f"{DOMAIN}_wheels_updated"
+SIGNAL_CONNECTION = f"{DOMAIN}_connection"
+SIGNAL_BINDINGS_UPDATED = f"{DOMAIN}_bindings_updated"
+SIGNAL_BINDING_ACTIVITY = f"{DOMAIN}_binding_activity"
+SIGNAL_SETTINGS_UPDATED = f"{DOMAIN}_settings_updated"
+# A press or a run of actions of one binding is changing these entities.
+SIGNAL_TARGETS_COMMANDED = f"{DOMAIN}_targets_commanded"
+
+# --- repair issues ------------------------------------------------------
+ISSUE_CANNOT_CONNECT = "cannot_connect"
+ISSUE_LEGACY_DEVICE_TRIGGERS = "legacy_device_triggers"
+# Grace period before a lost connection is surfaced as a repair issue.
+DISCONNECT_GRACE_SECONDS = 60
+
+
+def signal_channel(node_id: int, channel: int | None) -> str:
+    """Per-node/channel signal; button endpoints share channel=None and filter."""
+    return f"{DOMAIN}_action_{node_id}_{channel}"
+
+
+def signal_raw_button(node_id: int, channel: int | None) -> str:
+    """Internal per-node/channel raw signal carrying endpoint metadata."""
+    return f"{DOMAIN}_raw_button_{node_id}_{channel}"

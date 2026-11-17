@@ -1,0 +1,377 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "IKEA BILRESA",
+        "description": "Connect to the Matter Server that already controls your BILRESA wheels. The URL is pre-filled from your Matter integration — leave it as is unless you run the Matter Server elsewhere.",
+        "data": {
+          "url": "Matter Server WebSocket URL"
+        }
+      },
+      "reconfigure": {
+        "title": "Change Matter Server connection",
+        "description": "Update the Matter Server WebSocket URL. The new address is tested before the integration reconnects.",
+        "data": {
+          "url": "Matter Server WebSocket URL"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect to the Matter Server. Check the URL and that the Matter Server add-on is running."
+    },
+    "abort": {
+      "already_configured": "IKEA BILRESA is already set up."
+    }
+  },
+  "config_subentries": {
+    "binding": {
+      "title": "Control binding",
+      "initiate_flow": {
+        "user": "Add control binding",
+        "reconfigure": "Reconfigure control binding"
+      },
+      "entry_type": "control binding",
+      "step": {
+        "user": {
+          "title": "Configure a BILRESA control",
+          "description": "Choose a BILRESA device or copy an existing binding. Wheel channels show rotary and button actions; dual-button endpoints show only the actions their hardware supports.",
+          "data": {
+            "binding_profile": "Starting profile",
+            "copy_from": "Copy settings from an existing binding (optional)",
+            "node_id": "BILRESA device",
+            "channel": "Channel",
+            "endpoint": "Button",
+            "target": "Target (one or more lights, or a media player, cover, climate, fan, number)",
+            "mode": "Scroll controls",
+            "step": "Change per notch (% of range)",
+            "acceleration": "Acceleration (faster scroll = bigger steps)",
+            "min_brightness": "Minimum brightness (%, 0 = scroll can switch off)",
+            "max_brightness": "Maximum brightness (%)",
+            "transition": "Smoothing of large jumps (s)",
+            "click_action": "Button single-press action (empty: toggle, or run a script or a scene)",
+            "button_response": "Button response",
+            "click_target": "Single-press target",
+            "double_press_target": "Double-press target (optional)",
+            "double_press_action": "Double-press action (empty: toggle, or run a script or a scene)",
+            "triple_press_target": "Triple-press target (optional)",
+            "triple_press_action": "Triple-press action (empty: toggle, or run a script or a scene)",
+            "hold_target": "Hold-action target",
+            "hold_target_action": "Hold action on its target (empty: toggle, or run a script or a scene)",
+            "hold_action": "Button hold action",
+            "ramp_direction": "Hold-ramp direction",
+            "scenes": "Scenes cycled by single press (optional, overrides its action)",
+            "step_curve": "Step placement",
+            "follower_light": "Follower light (optional)",
+            "follower_offset": "Follower offset (percentage points)",
+            "follower_min": "Follower minimum brightness (%)"
+          },
+          "data_description": {
+            "button_response": "Instant runs on the initial press and requires multi-press and hold actions to be disabled. Fast release runs after the first short release. Multi-press aware waits for the completed gesture. Public BILRESA events remain fully classified in every mode.",
+            "transition": "Fast rotation reaches Home Assistant in batches of notches. A single notch is always applied immediately, so the wheel stays responsive; a larger batch is spread over up to this long, in proportion to its size. 0 turns smoothing off.",
+            "step_curve": "If fast scrolling looks like it jumps, especially near the bottom of the range, switch this to perceptual and scroll again. Leave it linear if the lamp already evens out its own dimming — correcting twice is worse than not correcting at all.",
+            "follower_light": "The follower is adjusted only while it is already on."
+          }
+        },
+        "profile": {
+          "title": "Choose a wheel profile",
+          "description": "Select starting defaults for this wheel channel. You can adjust every value on the next screen.",
+          "data": {
+            "binding_profile": "Starting profile"
+          }
+        },
+        "reconfigure": {
+          "title": "Reconfigure control binding",
+          "description": "Adjust this wheel channel or dual-button endpoint. Only options supported by the selected hardware are shown.",
+          "data": {
+            "node_id": "BILRESA device",
+            "channel": "Channel",
+            "endpoint": "Button",
+            "target": "Target (one or more lights, or a media player, cover, climate, fan, number)",
+            "mode": "Scroll controls",
+            "step": "Change per notch (% of range)",
+            "acceleration": "Acceleration (faster scroll = bigger steps)",
+            "min_brightness": "Minimum brightness (%, 0 = scroll can switch off)",
+            "max_brightness": "Maximum brightness (%)",
+            "transition": "Smoothing of large jumps (s)",
+            "click_action": "Button single-press action (empty: toggle, or run a script or a scene)",
+            "button_response": "Button response",
+            "click_target": "Single-press target",
+            "double_press_target": "Double-press target (optional)",
+            "double_press_action": "Double-press action (empty: toggle, or run a script or a scene)",
+            "triple_press_target": "Triple-press target (optional)",
+            "triple_press_action": "Triple-press action (empty: toggle, or run a script or a scene)",
+            "hold_target": "Hold-action target",
+            "hold_target_action": "Hold action on its target (empty: toggle, or run a script or a scene)",
+            "hold_action": "Button hold action",
+            "ramp_direction": "Hold-ramp direction",
+            "scenes": "Scenes cycled by single press (optional, overrides its action)",
+            "step_curve": "Step placement",
+            "follower_light": "Follower light (optional)",
+            "follower_offset": "Follower offset (percentage points)",
+            "follower_min": "Follower minimum brightness (%)"
+          },
+          "data_description": {
+            "button_response": "Instant runs on the initial press and requires multi-press and hold actions to be disabled. Fast release runs after the first short release. Multi-press aware waits for the completed gesture. Public BILRESA events remain fully classified in every mode.",
+            "transition": "Fast rotation reaches Home Assistant in batches of notches. A single notch is always applied immediately, so the wheel stays responsive; a larger batch is spread over up to this long, in proportion to its size. 0 turns smoothing off.",
+            "step_curve": "If fast scrolling looks like it jumps, especially near the bottom of the range, switch this to perceptual and scroll again. Leave it linear if the lamp already evens out its own dimming — correcting twice is worse than not correcting at all.",
+            "follower_light": "The follower is adjusted only while it is already on."
+          }
+        }
+      },
+      "error": {
+        "fast_response_conflicts_with_multi_press": "Fast response cannot be combined with a multi-press target. Remove that target or choose multi-press recognition.",
+        "instant_response_conflicts_with_multi_press": "Instant response cannot be combined with a multi-press target. Remove that target or choose multi-press recognition.",
+        "instant_response_conflicts_with_hold": "Instant response cannot be combined with a separate hold action. Set hold to Do nothing or choose Fast release / Multi-press aware.",
+        "mode_target_mismatch": "This target is not compatible with the selected scroll control. Choose a matching entity or change what scrolling controls.",
+        "multiple_targets_require_light_mode": "Several targets work only for lights in brightness, colour temperature or colour mode. Choose a single target or a light mode.",
+        "target_required": "Choose a target for this action, or set the action to Do nothing.",
+        "scene_cannot_turn_off": "A scene can only be run, not turned off. Choose Toggle or Turn on for that gesture.",
+        "ramp_requires_light": "Hold-to-ramp requires a light target.",
+        "action_not_supported": "This target cannot do that. Choose one of the actions listed for it.",
+        "actions_required": "Set the actions to run in the BILRESA panel first, or choose another action.",
+        "scenes_replace_short_press": "Cycling scenes replaces the short press, so it cannot run actions. Turn scene cycling off or choose another action."
+      },
+      "abort": {
+        "no_devices": "No supported BILRESA devices have been discovered yet. Make sure the device works in the Matter integration, then try again."
+      }
+    }
+  },
+  "selector": {
+    "click_action": {
+      "options": {
+        "toggle": "Toggle",
+        "on": "Turn on",
+        "off": "Turn off",
+        "play_pause": "Play / pause",
+        "play": "Play",
+        "pause": "Pause",
+        "stop": "Stop",
+        "next": "Next track",
+        "previous": "Previous track",
+        "volume_up": "Volume up",
+        "volume_down": "Volume down",
+        "mute_toggle": "Mute / unmute",
+        "open": "Open",
+        "close": "Close",
+        "lock": "Lock",
+        "start": "Start",
+        "return_home": "Return to dock",
+        "locate": "Locate",
+        "press": "Press the button",
+        "trigger": "Run the automation",
+        "speed_up": "Speed up",
+        "speed_down": "Slow down",
+        "next_option": "Next option",
+        "previous_option": "Previous option",
+        "first_option": "First option",
+        "last_option": "Last option",
+        "step_up": "Increase",
+        "step_down": "Decrease",
+        "run": "Run actions (set in the BILRESA panel)",
+        "none": "Do nothing"
+      }
+    },
+    "target_action": {
+      "options": {
+        "toggle": "Toggle (a scene is run)",
+        "on": "Turn on (a script or a scene is run)",
+        "off": "Turn off (a script is stopped)",
+        "play_pause": "Play / pause",
+        "play": "Play",
+        "pause": "Pause",
+        "stop": "Stop",
+        "next": "Next track",
+        "previous": "Previous track",
+        "volume_up": "Volume up",
+        "volume_down": "Volume down",
+        "mute_toggle": "Mute / unmute",
+        "open": "Open",
+        "close": "Close",
+        "lock": "Lock",
+        "start": "Start",
+        "return_home": "Return to dock",
+        "locate": "Locate",
+        "press": "Press the button",
+        "trigger": "Run the automation",
+        "speed_up": "Speed up",
+        "speed_down": "Slow down",
+        "next_option": "Next option",
+        "previous_option": "Previous option",
+        "first_option": "First option",
+        "last_option": "Last option",
+        "step_up": "Increase",
+        "step_down": "Decrease",
+        "run": "Run actions (set in the BILRESA panel)"
+      }
+    },
+    "scroll_mode": {
+      "options": {
+        "brightness": "Light brightness",
+        "color_temp": "Light colour temperature",
+        "color": "Light colour",
+        "volume": "Media player volume",
+        "cover_position": "Cover position",
+        "temperature": "Climate target temperature",
+        "fan_speed": "Fan speed",
+        "number": "Number value"
+      }
+    },
+    "hold_action": {
+      "options": {
+        "toggle": "Toggle target (a scene is run)",
+        "ramp": "Ramp target while held",
+        "run": "Run actions (set in the BILRESA panel)",
+        "none": "Do nothing"
+      }
+    },
+    "binding_profile": {
+      "options": {
+        "custom": "Custom",
+        "light": "Light dimmer",
+        "media": "Media volume",
+        "cover": "Cover position",
+        "climate": "Climate temperature",
+        "scenes": "Scene selector"
+      }
+    },
+    "button_response": {
+      "options": {
+        "instant": "Instant initial press",
+        "fast": "Fast release",
+        "multi_press": "Recognize single, double or triple press"
+      }
+    },
+    "dual_button_response": {
+      "options": {
+        "instant": "Instant initial press",
+        "fast": "Fast release",
+        "multi_press": "Recognize single or double press"
+      }
+    },
+    "ramp_direction": {
+      "options": {
+        "alternate": "Alternate after each hold",
+        "up": "Always brighten",
+        "down": "Always dim"
+      }
+    },
+    "step_curve": {
+      "options": {
+        "linear": "Linear (default)",
+        "perceptual": "Perceptual (even to the eye)"
+      }
+    }
+  },
+  "system_health": {
+    "info": {
+      "configured": "Configured",
+      "config_entry_state": "Config entry state",
+      "matter_server_connected": "Matter Server connected",
+      "matter_server_version": "Matter Server SDK version",
+      "matter_event_source": "Matter event source",
+      "last_matter_event": "Last Matter event",
+      "fallback_reason": "Event-source fallback reason",
+      "discovered_wheels": "Discovered BILRESA wheels",
+      "configured_bindings": "Configured bindings"
+    }
+  },
+  "issues": {
+    "cannot_connect": {
+      "title": "Cannot reach the Matter Server",
+      "description": "IKEA BILRESA cannot connect to the Matter Server at {url}. Scroll wheels won't respond until the connection is restored. Check that the Matter Server add-on is running."
+    },
+    "legacy_device_triggers": {
+      "title": "Automations use retired BILRESA device triggers",
+      "description": "These automations still start from a BILRESA device trigger and no longer run:\n\n{automations}\n\nDevice triggers were removed, because since Home Assistant 2026.8 the wheel's device belongs to the Matter integration alone. Open each automation, delete the device trigger and add one of the BILRESA triggers instead, for example **BILRESA scrolled up**, with the wheel's Channel entity as its target. This notice disappears once no automation uses a device trigger."
+    }
+  },
+  "entity": {
+    "event": {
+      "channel": {
+        "name": "Channel {channel}",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "rotate_up": "Scrolled up",
+              "rotate_down": "Scrolled down",
+              "press": "Pressed once",
+              "double_press": "Pressed twice",
+              "triple_press": "Pressed 3 times",
+              "hold": "Held down",
+              "release": "Released after being held down"
+            }
+          },
+          "notches": {
+            "name": "Notches"
+          },
+          "presses": {
+            "name": "Presses"
+          },
+          "observed_duration_ms": {
+            "name": "Observed duration"
+          }
+        }
+      },
+      "button": {
+        "name": "Button {button}",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "press": "Pressed once",
+              "double_press": "Pressed twice",
+              "triple_press": "Pressed 3 times",
+              "hold": "Held down",
+              "release": "Released after being held down"
+            }
+          },
+          "presses": {
+            "name": "Presses"
+          },
+          "observed_duration_ms": {
+            "name": "Observed duration"
+          }
+        }
+      }
+    },
+    "number": {
+      "dial": {
+        "name": "Dial {channel}"
+      }
+    },
+    "switch": {
+      "channel_button": {
+        "name": "Button {channel}"
+      }
+    }
+  },
+  "triggers": {
+    "rotated_up": {
+      "name": "BILRESA scrolled up",
+      "description": "Triggers when a BILRESA wheel channel is scrolled up."
+    },
+    "rotated_down": {
+      "name": "BILRESA scrolled down",
+      "description": "Triggers when a BILRESA wheel channel is scrolled down."
+    },
+    "pressed": {
+      "name": "BILRESA pressed once",
+      "description": "Triggers when a BILRESA button is pressed once."
+    },
+    "double_pressed": {
+      "name": "BILRESA pressed twice",
+      "description": "Triggers when a BILRESA button is pressed twice."
+    },
+    "triple_pressed": {
+      "name": "BILRESA pressed 3 times",
+      "description": "Triggers when a BILRESA wheel button is pressed 3 times."
+    },
+    "held": {
+      "name": "BILRESA held down",
+      "description": "Triggers when a BILRESA button is held down."
+    },
+    "released": {
+      "name": "BILRESA released after being held down",
+      "description": "Triggers when a BILRESA button is released after being held down."
+    }
+  }
+}

@@ -1,0 +1,2474 @@
+"""Turnkey control bindings configured via config subentries.
+
+A binding subscribes either to one wheel channel or to one endpoint of a dual
+button. Depending on its *mode*, wheel scrolling adjusts a light's brightness /
+colour temperature / colour, a media player's volume, a cover's position, a
+climate target temperature, a fan's speed, or a number's value. Button-only
+bindings omit all rotary configuration while retaining single / double press
+and hold actions.
+
+Values are tracked internally as an absolute target rather than issued as
+relative steps. This avoids reading a mid-transition value back from the entity
+(a race during fast scrolling) and the abrupt "snap off" of relative steps.
+``step`` is interpreted as a percentage of the mode's range per notch, so one
+setting feels consistent across every kind of target.
+"""
+
+from __future__ import annotations
+
+import asyncio
+from collections import deque
+from collections.abc import Awaitable, Callable, Iterable
+from datetime import timedelta
+import logging
+import math
+import time
+from typing import Any
+
+from homeassistant.const import (
+    ATTR_AREA_ID,
+    ATTR_DEVICE_ID,
+    ATTR_ENTITY_ID,
+    ATTR_FLOOR_ID,
+    ATTR_LABEL_ID,
+)
+from homeassistant.core import Context, HomeAssistant, State, callback
+from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.dispatcher import (
+    async_dispatcher_connect,
+    async_dispatcher_send,
+)
+from homeassistant.helpers.event import (
+    async_call_later,
+    async_track_state_change_event,
+    async_track_time_interval,
+)
+from homeassistant.helpers.script import (
+    SCRIPT_MODE_QUEUED,
+    Script,
+    async_validate_actions_config,
+)
+from homeassistant.helpers.target import (
+    TargetSelection,
+    async_extract_referenced_entity_ids,
+)
+import voluptuous as vol
+
+from .channel_controls import ScrollAccelerator, perceptual_target
+from .const import (
+    ACTION_HOLD,
+    ACTION_PRESS,
+    ACTION_RELEASE,
+    ACTION_ROTATE,
+    ACTION_RUN,
+    BUTTON_RESPONSE_FAST,
+    BUTTON_RESPONSE_INSTANT,
+    CLICK_NONE,
+    CONF_ACCELERATION,
+    CONF_BUTTON_RESPONSE,
+    CONF_CHANNEL,
+    CONF_CLICK_ACTION,
+    CONF_CLICK_SEQUENCE,
+    CONF_CLICK_TARGET,
+    CONF_DOUBLE_ACTION,
+    CONF_DOUBLE_SEQUENCE,
+    CONF_DOUBLE_TARGET,
+    CONF_ENDPOINT,
+    CONF_FOLLOWER,
+    CONF_FOLLOWER_MIN,
+    CONF_FOLLOWER_OFFSET,
+    CONF_HOLD_ACTION,
+    CONF_HOLD_SEQUENCE,
+    CONF_HOLD_TARGET,
+    CONF_HOLD_TARGET_ACTION,
+    CONF_MAX_BRIGHTNESS,
+    CONF_MIN_BRIGHTNESS,
+    CONF_MODE,
+    CONF_NODE_ID,
+    CONF_RAMP_DIRECTION,
+    CONF_SCENES,
+    CONF_STEP,
+    CONF_STEP_CURVE,
+    CONF_TARGET,
+    CONF_TRANSITION,
+    CONF_TRIPLE_ACTION,
+    CONF_TRIPLE_SEQUENCE,
+    CONF_TRIPLE_TARGET,
+    DEFAULT_ACCELERATION,
+    DEFAULT_BUTTON_RESPONSE,
+    DEFAULT_CLICK_ACTION,
+    DEFAULT_HOLD_ACTION,
+    DEFAULT_MAX_BRIGHTNESS,
+    DEFAULT_MIN_BRIGHTNESS,
+    DEFAULT_MODE,
+    DEFAULT_RAMP_DIRECTION,
+    DEFAULT_STEP,
+    DEFAULT_STEP_CURVE,
+    DEFAULT_TARGET_ACTION,
+    DEFAULT_TRANSITION,
+    DIRECTION_UP,
+    DOMAIN,
+    EVT_INITIAL_PRESS,
+    EVT_MULTI_PRESS_COMPLETE,
+    EVT_SHORT_RELEASE,
+    FALLBACK_MAX_KELVIN,
+    FALLBACK_MIN_KELVIN,
+    HOLD_NONE,
+    HOLD_RAMP,
+    HOLD_RUN,
+    HOLD_TOGGLE,
+    MODE_BRIGHTNESS,
+    MODE_COLOR,
+    MODE_COLOR_TEMP,
+    MODE_COVER,
+    MODE_FAN,
+    MODE_NUMBER,
+    MODE_TEMPERATURE,
+    MODE_VOLUME,
+    MULTI_TARGET_MODES,
+    RAMP_DIRECTION_ALTERNATE,
+    RAMP_DIRECTION_DOWN,
+    ROLE_BUTTON,
+    ROLE_SCROLL_DOWN,
+    ROLE_SCROLL_UP,
+    SIGNAL_BINDING_ACTIVITY,
+    SIGNAL_CONNECTION,
+    SIGNAL_TARGETS_COMMANDED,
+    STEP_CURVE_PERCEPTUAL,
+    SWITCH_EVENT_NAMES,
+    acts_while_unknown,
+    binding_targets,
+    mode_supports_target,
+    signal_channel,
+    signal_raw_button,
+)
+from .engine import WheelAction
+from .gesture_actions import (
+    GESTURE_DOUBLE_PRESS,
+    GESTURE_HOLD,
+    GESTURE_SHORT_PRESS,
+    GESTURE_TRIPLE_PRESS,
+    action_is_supported,
+    gesture_call,
+    passes_variables,
+    result_label,
+)
+from .trace import RotationTrace
+
+_LOGGER = logging.getLogger(__name__)
+
+ATTR_BRIGHTNESS = "brightness"
+ATTR_TRANSITION = "transition"
+ATTR_COLOR_TEMP_KELVIN = "color_temp_kelvin"
+ATTR_HS_COLOR = "hs_color"
+ATTR_MIN_KELVIN = "min_color_temp_kelvin"
+ATTR_MAX_KELVIN = "max_color_temp_kelvin"
+
+_UNAVAILABLE = (None, "unknown", "unavailable")
+
+
+# How long our tracked target stays authoritative before we resync from state.
+_RESYNC_AFTER = 3.0
+# A multi-light binding waits for the bulbs' late acknowledgements, so it keeps
+# its tracked level longer; past this it reads the lights again.
+_MULTI_RESYNC_AFTER = 30.0
+# After a press switched a multi-light set off, the lights are taken as off for
+# this long (or until one reports on), so a quick scroll does not read the
+# state from before the press and relight them.
+_OFF_INTENT_SECONDS = 5.0
+_STATE_ECHO_MARGIN = 0.25
+
+# A missing gesture boundary must not suppress rotation indefinitely.
+_TRAILING_GESTURE_TIMEOUT = 2.0
+# Matter rotary batches observed on the physical E2490 arrive roughly every
+# 0.5 seconds. Four such intervals protect an active target calculation while
+# still recovering promptly if MultiPressComplete is lost.
+_ACTIVE_SCROLL_TIMEOUT = 2.0
+# One continuous physical scroll reaches Home Assistant as several Matter
+# gestures: MultiPressComplete ends one and the next InitialPress opens the
+# following one. A delayed absolute echo landing in that gap would otherwise
+# rebase the next notch from state that is still catching up. Two observed
+# batch intervals, bounded by the same hard timeout as an active gesture.
+_SCROLL_AUTHORITY_GRACE = 1.0
+# A target echoes an absolute value quantized to its own resolution — a Shelly
+# Plus 0-10V dimmer stores whole percent, so 156/255 returns as 155. Recognize
+# our own value within a fraction of the mode's full range instead of by
+# equality; anything further away is a genuine third-party change.
+_ECHO_MATCH_FRACTION = 0.01
+# Modes whose target is always a light entity — the only place an aggregated
+# target (a Zigbee2MQTT-style group) makes an off-path state report
+# indistinguishable from a real external change mid-scroll.
+_LIGHT_MODES = frozenset({MODE_BRIGHTNESS, MODE_COLOR_TEMP, MODE_COLOR})
+# Enough dispatched values to cover several delayed batches without keeping an
+# unbounded history.
+_COMMAND_HISTORY = 8
+# How many runs of one gesture's actions may exist at once: Home Assistant counts
+# the one running, so five means one running and four waiting.
+_MAX_RUNS = 5
+
+# The largest single rotary batch recorded on the physical E2490 during the
+# uncontrolled fast-scroll stress run (batches of 14, 9, 6 and 14 notches). A
+# batch that size receives the whole configured transition; smaller batches
+# receive proportionally less, so the smoothing tracks how far the light has
+# to travel. No duration is claimed here: the ceiling is the owner's own
+# setting and remains subject to a controlled Hardware A/B.
+_SMOOTHING_FULL_BATCH = 14
+
+# Acceleration is derived from recent decoded velocity, never a single Matter
+# batch size. The model itself lives in `channel_controls.ScrollAccelerator`,
+# shared with the channel dials so one setting means one thing. Defaults remain
+# disabled until physical tuning is complete.
+
+# If a MultiPressComplete is lost, allow a clearly later gesture to recover
+# instead of leaving fast single-press handling blocked indefinitely.
+_FAST_PRESS_GESTURE_TIMEOUT = 2.0
+
+_INITIAL_PRESS = SWITCH_EVENT_NAMES[EVT_INITIAL_PRESS]
+_COMPLETE = SWITCH_EVENT_NAMES[EVT_MULTI_PRESS_COMPLETE]
+_SHORT_RELEASE = SWITCH_EVENT_NAMES[EVT_SHORT_RELEASE]
+
+# Absolute values make intermediate commands redundant, so a burst is thinned
+# to protect the target. Chosen just under the ramp's own 200 ms cadence so a
+# held ramp still sends every tick, while a fast scroll - which can calculate a
+# target every ~110 ms - is halved. Not derived from a device datasheet: it is
+# a conservative default, and the honest limit of any one device is unknown.
+_MIN_COMMAND_INTERVAL = 0.18
+
+# Hold-to-ramp: how often and by how much to step while the button is held.
+_RAMP_INTERVAL = timedelta(seconds=0.2)
+_RAMP_NOTCHES = 1
+# A lost Matter LongRelease event must never leave a target changing forever.
+_RAMP_WATCHDOG_SECONDS = 30
+
+
+def _pct_to_units(pct: float) -> int:
+    return round(pct / 100 * 255)
+
+
+def _hue_offset(value: float, origin: float) -> float:
+    """Signed distance from ``origin`` to ``value`` on the hue circle."""
+    return (value - origin + 180) % 360 - 180
+
+
+def _on_hue_arc(
+    observed: float, start: float | None, end: float, tolerance: float
+) -> bool:
+    """Whether ``observed`` lies on the shorter arc from ``start`` to ``end``.
+
+    A bulb fading between two hues reports the hues in between, so checking
+    the two ends alone would call every intermediate report an outside change.
+    """
+    if abs(_hue_offset(observed, end)) <= tolerance:
+        return True
+    if start is None:
+        return False
+    length = _hue_offset(end, start)
+    if abs(abs(length) - 180) < 1e-6:
+        # Half way round: both arcs are equally short, and a report is on one.
+        return True
+    travelled = _hue_offset(observed, start)
+    if abs(travelled) <= tolerance:
+        return True
+    return travelled * length > 0 and abs(travelled) <= abs(length)
+
+
+def _mean_hue(hues: list[float]) -> float:
+    """The circular mean of hues in degrees; an arithmetic mean breaks at 0°."""
+    x = sum(math.cos(math.radians(hue)) for hue in hues)
+    y = sum(math.sin(math.radians(hue)) for hue in hues)
+    return math.degrees(math.atan2(y, x)) % 360
+
+
+def _as_float(value: Any) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+class LightBinding:
+    """Runtime for one GUI-configured wheel channel or button endpoint."""
+
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        data: dict[str, Any],
+        trace: RotationTrace | None = None,
+        device_name: Callable[[], str] | None = None,
+    ) -> None:
+        self.hass = hass
+        # The wheel's name, asked for when needed because it can change and the
+        # wheel may be discovered after the binding. A Fast or Instant short
+        # press runs before the gesture engine has built its action, so it
+        # cannot take the name from there.
+        self._device_name = device_name or (lambda: "")
+        # Optional so a binding constructed without a coordinator - in tests,
+        # and in any future caller - still works, with tracing simply absent.
+        self._trace = trace or RotationTrace()
+        self._trace_from: float | None = None
+        self._trace_source: str | None = None
+        self._node_id = int(data[CONF_NODE_ID])
+        raw_channel = data.get(CONF_CHANNEL)
+        raw_endpoint = data.get(CONF_ENDPOINT)
+        self._channel = int(raw_channel) if raw_channel is not None else None
+        self._endpoint_id = int(raw_endpoint) if raw_endpoint is not None else None
+        if (self._channel is None) == (self._endpoint_id is None):
+            raise ValueError(
+                "A BILRESA binding must contain exactly one of channel or endpoint"
+            )
+        self._hold_action = data.get(CONF_HOLD_ACTION, DEFAULT_HOLD_ACTION)
+        self._hold_target = data.get(CONF_HOLD_TARGET)
+        # Every entity this binding rotates. Usually one; a multi-light
+        # binding lists several, and they all receive the same value from the
+        # one target tracked below.
+        self._targets: list[str] = binding_targets(data.get(CONF_TARGET))
+        if self._endpoint_id is not None and self._hold_action == HOLD_RAMP:
+            # A button has no rotary target. Its hold target becomes the
+            # brightness-ramp target while the rotary-only mode remains hidden.
+            self._targets = binding_targets(self._hold_target)
+        # The first target names the binding in logs, traces and the
+        # aggregated state of a multi-light binding.
+        self._target: str = self._targets[0] if self._targets else ""
+        if self._channel is not None and not self._target:
+            raise ValueError("A wheel-channel binding requires a target")
+        self._mode = data.get(CONF_MODE, DEFAULT_MODE)
+        self._follower = data.get(CONF_FOLLOWER)
+        self._follower_offset = float(data.get(CONF_FOLLOWER_OFFSET, -10))
+        self._follower_min = float(data.get(CONF_FOLLOWER_MIN, 1))
+        self._multi = len(self._targets) > 1
+        self._mode_target_valid = (
+            bool(self._targets)
+            and (not self._multi or self._mode in MULTI_TARGET_MODES)
+            and all(mode_supports_target(self._mode, t) for t in self._targets)
+        )
+        if not self._mode_target_valid and (
+            self._channel is not None
+            or (self._endpoint_id is not None and self._hold_action == HOLD_RAMP)
+        ):
+            _LOGGER.error(
+                "Disabling incompatible BILRESA binding mode %s for target %s",
+                self._mode,
+                self._target,
+            )
+        self._step = float(data.get(CONF_STEP, DEFAULT_STEP))
+        self._step_curve = data.get(CONF_STEP_CURVE, DEFAULT_STEP_CURVE)
+        self._accelerator = ScrollAccelerator(
+            float(data.get(CONF_ACCELERATION, DEFAULT_ACCELERATION))
+        )
+        self._min_units = _pct_to_units(
+            float(data.get(CONF_MIN_BRIGHTNESS, DEFAULT_MIN_BRIGHTNESS))
+        )
+        self._max_units = _pct_to_units(
+            float(data.get(CONF_MAX_BRIGHTNESS, DEFAULT_MAX_BRIGHTNESS))
+        )
+        self._transition = float(data.get(CONF_TRANSITION, DEFAULT_TRANSITION))
+        self._click = data.get(CONF_CLICK_ACTION, DEFAULT_CLICK_ACTION)
+        explicit_click = data.get(CONF_CLICK_TARGET)
+        self._click_target: str | None = explicit_click or self._target
+        # A wheel without its own short-press target presses what it rotates:
+        # every light of a multi-light binding, not only the first.
+        self._click_targets: list[str] = (
+            [explicit_click] if explicit_click else list(self._targets)
+        )
+        self._double_target = data.get(CONF_DOUBLE_TARGET)
+        self._triple_target = data.get(CONF_TRIPLE_TARGET)
+        # What each of them does to its target. A binding saved before the
+        # choice existed has none, and toggled, which is what a missing value
+        # keeps meaning.
+        self._double_action = data.get(CONF_DOUBLE_ACTION, DEFAULT_TARGET_ACTION)
+        self._triple_action = data.get(CONF_TRIPLE_ACTION, DEFAULT_TARGET_ACTION)
+        self._hold_target_action = data.get(
+            CONF_HOLD_TARGET_ACTION, DEFAULT_TARGET_ACTION
+        )
+        # The action sequences of the gestures set to "run", and the scripts
+        # built from them the first time they are needed.
+        self._sequences: dict[str, list[dict[str, Any]]] = {
+            gesture: list(data[field])
+            for gesture, field in (
+                (GESTURE_SHORT_PRESS, CONF_CLICK_SEQUENCE),
+                (GESTURE_DOUBLE_PRESS, CONF_DOUBLE_SEQUENCE),
+                (GESTURE_TRIPLE_PRESS, CONF_TRIPLE_SEQUENCE),
+                (GESTURE_HOLD, CONF_HOLD_SEQUENCE),
+            )
+            if data.get(field)
+        }
+        self._scripts: dict[str, Script] = {}
+        # Two quick first presses must share one script, or their runs would not
+        # queue behind each other; the lock makes the second wait for the first.
+        self._build_lock = asyncio.Lock()
+        self._closed = False
+        self._scenes: list[str] = list(data.get(CONF_SCENES) or [])
+        self._scene_index = 0
+        self._ramp_direction = data.get(CONF_RAMP_DIRECTION, DEFAULT_RAMP_DIRECTION)
+        self._ramp_up = self._ramp_direction != RAMP_DIRECTION_DOWN
+        self._ramp_active = False
+        self._ramp_unsub: Callable[[], None] | None = None
+        self._ramp_watchdog_unsub: Callable[[], None] | None = None
+        self._tracked: float | None = None
+        self._command_authoritative_until = 0.0
+        self._last_direction: str | None = None
+        self._saturation = 100.0
+        self._last = 0.0
+        self._scroll_gesture = 0
+        # One continuous physical rotation, delimited by the scroll authority
+        # window going quiet rather than by Matter gesture boundaries — the
+        # firmware splits one rotation into many initial_press groups. The
+        # first dispatched batch of an epoch stays eager; smoothing applies to
+        # everything after it.
+        self._scroll_epoch = 0
+        self._commanded_epoch: int | None = None
+        self._active_scrolls: dict[int | None, float] = {}
+        self._last_scroll_seen: float | None = None
+        # Where each target entity last said it was: one end of the path it
+        # is on. Keyed by entity so the lights of a multi-light binding are
+        # each judged against their own trajectory, never against each other.
+        self._last_reported: dict[str, float] = {}
+        # Lights of a multi-light binding that dropped out and have not
+        # reported since. Their first report back is a power cycle or a
+        # reconnect, not a choice anyone made about the brightness.
+        self._rejoining: set[str] = set()
+        self._off_intent_until = 0.0
+        # Counts the service calls this binding made, so a failure only
+        # discards the tracked level when no newer call has been made since.
+        self._command_seq = 0
+        # Outgoing-command rate limiting. An instance attribute so a test can
+        # disable it without patching the module.
+        self._min_command_interval = _MIN_COMMAND_INTERVAL
+        # None rather than 0.0: a monotonic clock starting at zero would make
+        # the very first command look like it followed one, and delaying that
+        # one is the opposite of what this is for.
+        self._last_command_at: float | None = None
+        self._pending_command: (
+            tuple[str, str, dict[str, Any], dict[str, Any]] | None
+        ) = None
+        self._pending_unsub: Callable[[], None] | None = None
+        # Recently calculated targets with the range they were derived from,
+        # so a later absolute state report can be recognized as our own echo.
+        self._commanded: deque[tuple[float, float]] = deque(maxlen=_COMMAND_HISTORY)
+        self._button_scroll_boundary: int | None = None
+        self._suppress_scroll_through = -1
+        self._suppress_scroll_until = 0.0
+        self._reset_velocity_after_rotate = False
+        self._unavailable_targets: set[str] = set()
+        button_response = data.get(CONF_BUTTON_RESPONSE, DEFAULT_BUTTON_RESPONSE)
+        instant_requested = button_response == BUTTON_RESPONSE_INSTANT
+        self._instant_single = (
+            instant_requested
+            and self._double_target is None
+            and self._triple_target is None
+            and ACTION_RUN not in (self._double_action, self._triple_action)
+            and self._hold_action == HOLD_NONE
+        )
+        if instant_requested and not self._instant_single:
+            _LOGGER.error(
+                "Disabling ambiguous BILRESA Instant response; use validation "
+                "to remove multi-press and hold actions"
+            )
+        self._fast_single = button_response == BUTTON_RESPONSE_FAST
+        self._fast_press_started: float | None = None
+        self._latency_trace_sequence = 0
+        self._latency_trace_started_at: float | None = None
+        self._latency_trace_target_seen = False
+        self._active_action: WheelAction | None = None
+        self._ramp_action: WheelAction | None = None
+
+    @property
+    def node_id(self) -> int:
+        """Matter node ID used only inside the integration runtime."""
+        return self._node_id
+
+    @property
+    def channel(self) -> int | None:
+        """Physical wheel channel, or None for a button endpoint binding."""
+        return self._channel
+
+    @property
+    def endpoint_id(self) -> int | None:
+        """Physical button endpoint, or None for a wheel-channel binding."""
+        return self._endpoint_id
+
+    @property
+    def binding_key(self) -> tuple[int, str, int]:
+        """Collision-free runtime key across wheels, buttons and devices."""
+        if self._channel is not None:
+            return (self._node_id, CONF_CHANNEL, self._channel)
+        assert self._endpoint_id is not None
+        return (self._node_id, CONF_ENDPOINT, self._endpoint_id)
+
+    @property
+    def trace_key(self) -> str:
+        """Stable, printable identity for this binding inside a capture."""
+        node, kind, address = self.binding_key
+        return f"{node}:{kind}:{address}"
+
+    @callback
+    def trace_config(self) -> dict[str, Any]:
+        """The settings a replay needs to rebuild this binding exactly.
+
+        Only rotation-relevant values, and the target is included so a replay
+        can seed its simulated entity — diagnostics redacts it by key.
+        """
+        config = {
+            "mode": self._mode,
+            "target": self._target,
+            "step": self._step,
+            "step_curve": self._step_curve,
+            "acceleration": self._accelerator.percent,
+            "min_units": self._min_units,
+            "max_units": self._max_units,
+            "transition": self._transition,
+        }
+        if self._multi:
+            config["targets"] = list(self._targets)
+        return config
+
+    @callback
+    def test_action(self, action: WheelAction) -> None:
+        """Run a panel-requested action through the normal binding path."""
+        self._handle_action(action)
+
+    @callback
+    def async_attach(self) -> Callable[[], None]:
+        """Start listening for this channel's actions; returns an unsubscribe."""
+        action_unsub = async_dispatcher_connect(
+            self.hass,
+            signal_channel(self._node_id, self._channel),
+            self._handle_dispatched_action,
+        )
+        raw_button_unsub = async_dispatcher_connect(
+            self.hass,
+            signal_raw_button(self._node_id, self._channel),
+            self._handle_raw_input,
+        )
+        connection_unsub = async_dispatcher_connect(
+            self.hass, SIGNAL_CONNECTION, self._handle_connection_change
+        )
+        commanded_unsub = async_dispatcher_connect(
+            self.hass, SIGNAL_TARGETS_COMMANDED, self._handle_targets_commanded
+        )
+        self._seed_rejoining()
+        state_unsub = (
+            async_track_state_change_event(
+                self.hass, list(self._targets), self._handle_target_state_change
+            )
+            if self._targets
+            else None
+        )
+        trace_state_unsub = (
+            async_track_state_change_event(
+                self.hass,
+                [self._click_target],
+                self._handle_latency_target_state_change,
+            )
+            if self._click_target is not None
+            and self._click_target not in self._targets
+            and self._click_target != self._target
+            else None
+        )
+
+        @callback
+        def unsubscribe() -> None:
+            self._stop_ramp(change_direction=False)
+            self._stop_sequences()
+            self._cancel_pending_command()
+            self._fast_press_started = None
+            self._reset_latency_trace()
+            if trace_state_unsub is not None:
+                trace_state_unsub()
+            if state_unsub is not None:
+                state_unsub()
+            commanded_unsub()
+            connection_unsub()
+            raw_button_unsub()
+            action_unsub()
+
+        return unsubscribe
+
+    @callback
+    def _handle_dispatched_action(self, action: WheelAction) -> None:
+        """Filter the shared channel=None signal to this physical endpoint."""
+        if action.node_id != self._node_id or (
+            self._endpoint_id is not None and action.endpoint_id != self._endpoint_id
+        ):
+            return
+        self._handle_action(action)
+
+    @callback
+    def _handle_action(self, action: WheelAction) -> None:
+        previous_action = self._active_action
+        self._active_action = action
+        try:
+            if self._ramp_active and action.type in (
+                ACTION_ROTATE,
+                ACTION_PRESS,
+                ACTION_HOLD,
+            ):
+                # Any new gesture supersedes a hold whose release may have been lost.
+                self._stop_ramp(change_direction=False)
+            if action.type == ACTION_ROTATE:
+                self._rotate(action)
+            elif action.type == ACTION_PRESS:
+                self._hold_off_rotation()
+                if self._fast_press_started is not None:
+                    # The binding already ran one immediate single-press action.
+                    # MultiPressComplete still reaches event entities/device
+                    # triggers, but must not execute the binding a second time.
+                    self._log_latency_stage(
+                        "multi_press_complete", presses=action.presses
+                    )
+                    self._fast_press_started = None
+                    self._report_activity(
+                        "completed",
+                        result={"kind": "press", "action": "already_dispatched"},
+                    )
+                    return
+                if action.presses == 1:
+                    self._single_press()
+                elif action.presses == 2:
+                    self._press_target(
+                        GESTURE_DOUBLE_PRESS, self._double_target, self._double_action
+                    )
+                elif action.presses == 3:
+                    self._press_target(
+                        GESTURE_TRIPLE_PRESS, self._triple_target, self._triple_action
+                    )
+                else:
+                    self._report_activity("skipped", reason="unsupported_press_count")
+            elif action.type == ACTION_HOLD:
+                self._hold_off_rotation()
+                if self._hold_action == HOLD_RAMP:
+                    self._start_ramp()
+                elif self._hold_action == HOLD_TOGGLE:
+                    self._press_target(
+                        GESTURE_HOLD, self._hold_target, self._hold_target_action
+                    )
+                elif self._hold_action == HOLD_RUN:
+                    self._run_sequence(GESTURE_HOLD)
+                else:
+                    self._report_activity("skipped", reason="hold_not_configured")
+            elif action.type == ACTION_RELEASE and self._hold_action == HOLD_RAMP:
+                self._stop_ramp(change_direction=True)
+                self._report_activity(
+                    "completed", result={"kind": "hold", "action": "ramp_stopped"}
+                )
+            else:
+                self._report_activity("skipped", reason="gesture_not_configured")
+        finally:
+            self._active_action = previous_action
+
+    @callback
+    def _handle_connection_change(self) -> None:
+        """Stop safety-critical timers whenever Matter connectivity changes."""
+        self._fast_press_started = None
+        self._reset_latency_trace()
+        self._forget_target("matter_connection_change")
+        # Across a reconnect nothing is known about where the target got to.
+        self._commanded.clear()
+        self._last_reported.clear()
+        self._seed_rejoining()
+        self._cancel_pending_command()
+        self._command_authoritative_until = 0.0
+        self._last_direction = None
+        self._active_scrolls.clear()
+        self._last_scroll_seen = None
+        self._button_scroll_boundary = None
+        self._suppress_scroll_through = -1
+        self._suppress_scroll_until = 0.0
+        self._reset_velocity()
+        self._stop_ramp(change_direction=False)
+
+    def _seed_rejoining(self) -> None:
+        """Mark the lights that are out of reach now as ones that will rejoin.
+
+        A light that is already unavailable when the binding starts, or after a
+        reconnect, sends no "went away" event, so without this its first report
+        back would be taken for an outside change of the whole set.
+        """
+        self._rejoining.clear()
+        if self._multi:
+            self._rejoining.update(
+                member for member in self._targets if self._member_state(member) is None
+            )
+
+    @callback
+    def _handle_target_state_change(self, event) -> None:
+        """Rebase the next action after a genuine external target change."""
+        entity_id = self._event_entity_id(event)
+        if entity_id == self._click_target:
+            self._handle_latency_target_state_change(event)
+        new_state = event.data.get("new_state")
+        # An input row: a replay needs the target's own reports, with their
+        # timing, to reproduce what the binding was reacting to.
+        if self._trace.enabled:
+            row: dict[str, Any] = {
+                "binding": self.trace_key,
+                "state": None if new_state is None else new_state.state,
+                "value": (
+                    None if new_state is None else self._observed_value(new_state)
+                ),
+            }
+            if self._multi:
+                row["member"] = self._targets.index(entity_id)
+            self._trace.record("state", **row)
+        if new_state is None or new_state.state in _UNAVAILABLE:
+            if self._multi:
+                # One light of several dropping off says nothing about where
+                # the others are. Its last position is no longer a path, and
+                # the next command simply leaves it out; the tracked value
+                # stays, so the remaining lights do not jump.
+                self._last_reported.pop(entity_id, None)
+                self._rejoining.add(entity_id)
+                if any(
+                    self._member_state(member) is not None for member in self._targets
+                ):
+                    return
+            self._forget_target("target_unavailable")
+            # An unavailable target is not travelling anywhere we can describe,
+            # and a queued command for it would fail on arrival.
+            self._commanded.clear()
+            self._last_reported.clear()
+            self._cancel_pending_command()
+            self._command_authoritative_until = 0.0
+            self._stop_ramp(change_direction=False)
+            return
+        # Matter may batch one continuous scroll for several seconds while the
+        # target reports older absolute values between decoded deltas. Keep the
+        # newest calculated target authoritative for as long as that scroll is
+        # under way; otherwise a delayed zero-transition echo erases confirmed
+        # notches.
+        #
+        # For a *light* target no report rebases inside that window, including
+        # a value nobody sent. A light *group* has no single true value to
+        # report: a Zigbee2MQTT group republishes whichever member bulb
+        # answered last, so mid-fade its state wanders to levels no command
+        # asked for. Rebasing onto one of those produced the stale-level
+        # jumps of issue #9. The window is bounded, not permanent — the first
+        # report after the scroll goes quiet still takes over below, so a
+        # genuine external change is only delayed a couple of seconds, never
+        # lost. The one residual: a change reported only mid-scroll, with no
+        # report ever following it, cannot be told apart from a group
+        # member's stray level, so it is ignored as well — reconciling to
+        # the entity state afterwards would hand a lingering stale group
+        # report the next gesture, recreating the jump this fix removes.
+        #
+        # Other modes keep the established rebase: a cover, climate or media
+        # target has no aggregated state to distrust, so an off-path report
+        # mid-scroll is a real external change and still wins immediately.
+        now = time.monotonic()
+        self._active_scrolls = {
+            endpoint_id: last_seen
+            for endpoint_id, last_seen in self._active_scrolls.items()
+            if now - last_seen < _ACTIVE_SCROLL_TIMEOUT
+        }
+        observed = self._observed_value(new_state)
+        if entity_id in self._rejoining:
+            # Its level is whatever it woke up at; the next command brings it
+            # in line. Rebasing onto it would move every other light too.
+            self._rejoining.discard(entity_id)
+            if observed is not None:
+                self._last_reported[entity_id] = observed
+            self._trace.record(
+                "member_rejoined",
+                node_id=self._node_id,
+                channel=self._channel,
+                endpoint=self._endpoint_id,
+                reported=observed,
+            )
+            return
+        if self._multi and new_state.state == "on":
+            self._off_intent_until = 0.0
+        if (
+            self._multi
+            and (self._tracked is not None or self._pending_command is not None)
+            and new_state.state == "off"
+            and not self._any_member_on()
+        ):
+            # Every light is off, so nothing is left to follow the tracked
+            # level. This holds inside the scroll-authority window too: an
+            # off report is not a bulb catching up.
+            if observed is not None:
+                self._last_reported[entity_id] = observed
+            self._invalidate_tracking("all_lights_off")
+            return
+        own_echo = self._is_own_echo(new_state, entity_id)
+        settling = self._multi and self._is_settling(observed, entity_id)
+        # Recorded after the decision, so the next report is judged against
+        # where the target has actually got to.
+        if observed is not None:
+            self._last_reported[entity_id] = observed
+        if self._scroll_authoritative(now):
+            if (
+                not own_echo
+                and (self._mode not in _LIGHT_MODES or self._multi)
+                and not settling
+            ):
+                self._forget_target("unrecognized_value_during_scroll", observed)
+            else:
+                self._trace.record(
+                    "echo_ignored" if own_echo else "scroll_report_ignored",
+                    node_id=self._node_id,
+                    channel=self._channel,
+                    endpoint=self._endpoint_id,
+                    reported=observed,
+                    tracked=(
+                        None if self._tracked is None else round(self._tracked, 2)
+                    ),
+                )
+            return
+        # Outside a scroll, ignore only state echoes covered by the configured
+        # service transition. A later external update invalidates the desired
+        # value so the next gesture reads reality again.
+        if now >= self._command_authoritative_until:
+            if settling:
+                # Several lights never report together: one bulb's
+                # acknowledgement can trail the others by seconds, mid-fade,
+                # long after the transition window. A report still on its
+                # way to the value we sent is that bulb catching up, not
+                # somebody changing it. Rebasing onto it is what made a
+                # multi-light binding jump to one lagging bulb's level.
+                self._trace.record(
+                    "echo_ignored",
+                    node_id=self._node_id,
+                    channel=self._channel,
+                    endpoint=self._endpoint_id,
+                    reported=observed,
+                    tracked=(
+                        None if self._tracked is None else round(self._tracked, 2)
+                    ),
+                )
+                return
+            self._forget_target("outside_scroll_authority", observed)
+
+    def _event_entity_id(self, event) -> str:
+        """Name the target entity a state event belongs to."""
+        entity_id = event.data.get("entity_id") or getattr(
+            event.data.get("new_state"), "entity_id", None
+        )
+        if isinstance(entity_id, str) and entity_id in self._targets:
+            return entity_id
+        return self._target
+
+    def _is_settling(self, observed: float | None, entity_id: str) -> bool:
+        """Report whether one light is still on its way to our newest value.
+
+        Multi-light bindings only. The path is this light's own: from where
+        it last reported to the value most recently sent, widened by the
+        mode's quantization. Another light's position never enters it, so
+        two bulbs at different points of the same fade cannot make each other
+        look foreign. A light that settles anywhere else was changed by
+        someone else, and that still rebases.
+        """
+        if observed is None or not self._commanded:
+            return False
+        newest, span = self._commanded[-1]
+        tolerance = span * _ECHO_MATCH_FRACTION
+        previous = self._last_reported.get(entity_id)
+        if self._mode == MODE_COLOR:
+            return _on_hue_arc(observed, previous, newest, tolerance)
+        values = [newest] if previous is None else [newest, previous]
+        return min(values) - tolerance <= observed <= max(values) + tolerance
+
+    def _scroll_authoritative(self, now: float) -> bool:
+        """Report whether one continuous scroll still owns the target value."""
+        if self._active_scrolls:
+            return True
+        if self._last_scroll_seen is None:
+            return False
+        return now - self._last_scroll_seen < _SCROLL_AUTHORITY_GRACE
+
+    def _is_own_echo(self, state: State, entity_id: str | None = None) -> bool:
+        """Report whether a report is consistent with the target catching up.
+
+        Matching the reported value against the ones we sent is wrong for any
+        target that moves gradually. A dimmer with its own fade, a Zigbee bulb
+        with a default transition, a cover motor travelling for half a minute —
+        all report values *between* our commands, which are values we never
+        sent and equality can never recognize. Captured on a Shelly Plus 0-10V:
+        after commanding 84.15 the target reported 71, which sits between two
+        earlier commands, and treating it as somebody else's change threw away
+        nine notches at once.
+
+        What identifies our own movement is the trajectory, not the value: the
+        target travels from where it last reported towards the newest value we
+        gave it, so anything along that path — widened by the mode's own
+        quantization — is us. A report off that path is either a third-party
+        change or group chatter; mid-scroll the two cannot be told apart.
+
+        Deliberately unaddressed inside this function: a light *group*
+        republishes whichever member answered last — a Zigbee2MQTT group does
+        not average — so no path we describe can contain its mid-scroll
+        wanderings. `_handle_target_state_change` covers that by never
+        rebasing while a scroll is authoritative; the report after the scroll
+        ends is where a group reasserts its real level.
+        """
+        observed = self._observed_value(state)
+        if observed is None or not self._commanded:
+            return True
+        values = [value for value, _span in self._commanded]
+        previous = self._last_reported.get(entity_id or self._target)
+        if previous is not None:
+            values.append(previous)
+        span = max(span for _value, span in self._commanded)
+        tolerance = span * _ECHO_MATCH_FRACTION
+        if self._mode == MODE_COLOR:
+            # Hue wraps, so "between two values" has no meaning; proximity to
+            # something we sent is the only usable test.
+            return any(
+                min(abs(observed - value), span - abs(observed - value)) <= tolerance
+                for value in values
+            )
+        return min(values) - tolerance <= observed <= max(values) + tolerance
+
+    def _observed_value(self, state: State) -> float | None:
+        """Return the state value this binding's mode actually rotates."""
+        # A state without attributes carries no value to compare against, and
+        # this runs on the hot path for every report, so it must not raise.
+        attributes = getattr(state, "attributes", None) or {}
+        if self._mode == MODE_COLOR_TEMP:
+            return _as_float(attributes.get(ATTR_COLOR_TEMP_KELVIN))
+        if self._mode == MODE_COLOR:
+            hs_color = attributes.get(ATTR_HS_COLOR)
+            return _as_float(hs_color[0]) if hs_color else None
+        if self._mode == MODE_VOLUME:
+            return _as_float(attributes.get("volume_level"))
+        if self._mode == MODE_COVER:
+            return _as_float(attributes.get("current_position"))
+        if self._mode == MODE_TEMPERATURE:
+            return _as_float(attributes.get("temperature"))
+        if self._mode == MODE_FAN:
+            return _as_float(attributes.get("percentage"))
+        if self._mode == MODE_NUMBER:
+            return _as_float(state.state)
+        if state.state != "on":
+            return 0.0
+        return _as_float(attributes.get(ATTR_BRIGHTNESS))
+
+    @callback
+    def _set_target(self, value: float, span: float) -> None:
+        """Record the newest calculated target and the range it came from."""
+        self._tracked = value
+        self._commanded.append((value, max(span, 1e-9)))
+
+    @callback
+    def _forget_target(self, reason: str = "unspecified", reported: Any = None) -> None:
+        """Drop the calculated target so the next rotation reads reality.
+
+        Every caller names why. A scroll that loses steps almost always lost
+        them here, and the reason plus the value that triggered it is what
+        turns "steps went missing" into a specific defect.
+        """
+        if self._tracked is not None:
+            self._trace.record(
+                "forget",
+                node_id=self._node_id,
+                channel=self._channel,
+                endpoint=self._endpoint_id,
+                reason=reason,
+                had_tracked=round(self._tracked, 2),
+                reported=reported,
+                recent_commands=[round(value, 2) for value, _span in self._commanded],
+            )
+        self._tracked = None
+        # The command history is deliberately kept. It describes where the
+        # target is still travelling to, and that stays true after we give up
+        # our calculated value — clearing it made the very next report look
+        # unrecognizable too, turning one rebase into a cascade.
+
+    @callback
+    def _handle_latency_target_state_change(self, event) -> None:
+        """Record the first target-state acknowledgement for an active trace."""
+        if (
+            self._latency_trace_started_at is None
+            or self._latency_trace_target_seen
+            or event.data.get("new_state") is None
+        ):
+            return
+        self._latency_trace_target_seen = True
+        self._log_latency_stage("target_state_change")
+
+    @callback
+    def _handle_raw_input(
+        self, role: str, event_type: str, endpoint_id: int | None = None
+    ) -> None:
+        """Track private gesture boundaries and forward button hints."""
+        if self._endpoint_id is not None and endpoint_id != self._endpoint_id:
+            return
+        if self._trace.enabled:
+            # An input row: gesture boundaries drive the authority window, so a
+            # replay is not faithful without them.
+            self._trace.describe_binding(self.trace_key, self.trace_config())
+            self._trace.record(
+                "raw",
+                binding=self.trace_key,
+                role=role,
+                event_type=event_type,
+                endpoint=endpoint_id,
+            )
+        if role in (ROLE_SCROLL_UP, ROLE_SCROLL_DOWN):
+            now = time.monotonic()
+            # A scroll event arriving after the authority window went quiet is
+            # a new physical rotation: its first dispatched batch gets the
+            # eager, unsmoothed response again. Checked before updating
+            # `_last_scroll_seen`, which is what the window is measured from.
+            self._active_scrolls = {
+                endpoint: last_seen
+                for endpoint, last_seen in self._active_scrolls.items()
+                if now - last_seen < _ACTIVE_SCROLL_TIMEOUT
+            }
+            if not self._scroll_authoritative(now):
+                self._scroll_epoch += 1
+            # Every raw scroll event extends the window in which our own
+            # calculated target outranks a lagging absolute state report,
+            # including the completion that ends one Matter gesture of a
+            # longer physical rotation.
+            self._last_scroll_seen = now
+            if event_type == _INITIAL_PRESS:
+                self._scroll_gesture += 1
+                self._active_scrolls[endpoint_id] = now
+                self._reset_velocity()
+            elif event_type == _COMPLETE:
+                # The raw completion precedes its possible final delta action.
+                self._active_scrolls.pop(endpoint_id, None)
+                self._reset_velocity_after_rotate = True
+            elif endpoint_id in self._active_scrolls:
+                self._active_scrolls[endpoint_id] = now
+            return
+        if role != ROLE_BUTTON:
+            return
+        if event_type == _INITIAL_PRESS:
+            self._button_scroll_boundary = self._scroll_gesture
+        self._handle_raw_button(event_type)
+
+    @callback
+    def _handle_raw_button(self, event_type: str) -> None:
+        """Run an unambiguous early single-press binding exactly once."""
+        if not self._fast_single and not self._instant_single:
+            return
+        now = time.monotonic()
+        if event_type == _INITIAL_PRESS:
+            if (
+                self._fast_press_started is not None
+                and now - self._fast_press_started > _FAST_PRESS_GESTURE_TIMEOUT
+            ):
+                self._fast_press_started = None
+            if self._instant_single and self._fast_press_started is None:
+                self._run_early_single(now, _INITIAL_PRESS)
+            return
+        if (
+            not self._fast_single
+            or event_type != _SHORT_RELEASE
+            or self._fast_press_started is not None
+        ):
+            return
+
+        # A hold ends with LongRelease, so ShortRelease is safe for the normal
+        # click action. Further releases in the same multi-press gesture are
+        # collapsed until its public MultiPressComplete action arrives.
+        self._run_early_single(now, _SHORT_RELEASE)
+
+    @callback
+    def _run_early_single(self, now: float, stage: str) -> None:
+        """Execute the configured single action and arm completion suppression."""
+        self._fast_press_started = now
+        self._start_latency_trace(now, stage)
+        if self._ramp_active:
+            self._stop_ramp(change_direction=False)
+        self._hold_off_rotation()
+        previous_action = self._active_action
+        self._active_action = WheelAction(
+            node_id=self._node_id,
+            wheel_name=self._device_name(),
+            channel=self._channel,
+            endpoint_id=self._endpoint_id or 0,
+            type=ACTION_PRESS,
+            presses=1,
+        )
+        try:
+            self._single_press()
+        finally:
+            self._active_action = previous_action
+
+    def _start_latency_trace(self, now: float, stage: str) -> None:
+        """Start a privacy-safe fast-press trace only while DEBUG is enabled."""
+        if not _LOGGER.isEnabledFor(logging.DEBUG):
+            self._reset_latency_trace()
+            return
+        self._latency_trace_sequence += 1
+        self._latency_trace_started_at = now
+        self._latency_trace_target_seen = False
+        self._log_latency_stage(stage, now=now)
+
+    def _reset_latency_trace(self) -> None:
+        """Discard transient latency measurement state."""
+        self._latency_trace_started_at = None
+        self._latency_trace_target_seen = False
+
+    def _log_latency_stage(
+        self,
+        stage: str,
+        *,
+        now: float | None = None,
+        presses: int | None = None,
+    ) -> None:
+        """Log one trace stage without household or Matter identifiers."""
+        started_at = self._latency_trace_started_at
+        if started_at is None:
+            return
+        elapsed_ms = ((time.monotonic() if now is None else now) - started_at) * 1000
+        _LOGGER.debug(
+            "BILRESA latency trace=%s channel=%s stage=%s elapsed_ms=%.1f presses=%s",
+            self._latency_trace_sequence,
+            self._channel,
+            stage,
+            elapsed_ms,
+            presses if presses is not None else "-",
+        )
+
+    @callback
+    def _hold_off_rotation(self) -> None:
+        boundary = self._button_scroll_boundary
+        self._suppress_scroll_through = (
+            self._scroll_gesture if boundary is None else boundary
+        )
+        self._suppress_scroll_until = time.monotonic() + _TRAILING_GESTURE_TIMEOUT
+
+    @callback
+    def _report_activity(
+        self,
+        status: str,
+        *,
+        result: dict[str, Any] | None = None,
+        reason: str | None = None,
+        action: WheelAction | None = None,
+    ) -> None:
+        """Publish one privacy-bounded execution update for the panel."""
+        current = action or self._active_action
+        if current is None:
+            return
+        dispatched = (
+            True
+            if status == "accepted"
+            else False
+            if status
+            in {
+                "failed",
+                "skipped",
+            }
+            else None
+        )
+        async_dispatcher_send(
+            self.hass,
+            SIGNAL_BINDING_ACTIVITY,
+            {
+                "action_id": current.action_id,
+                "node_id": self._node_id,
+                "channel": self._channel,
+                "endpoint_id": self._endpoint_id,
+                "type": current.type,
+                "direction": current.direction,
+                "notches": current.notches,
+                "presses": current.presses,
+                "observed_duration_ms": current.observed_duration_ms,
+                "source": current.source,
+                "result": result,
+                "dispatch_status": status,
+                "dispatched": dispatched,
+                "reason": reason,
+            },
+        )
+
+    @staticmethod
+    def _value_result(
+        kind: str,
+        before: float | int,
+        after: float | int,
+        unit: str,
+    ) -> dict[str, Any]:
+        """Build the structured result rendered by the live-test view."""
+        return {
+            "kind": kind,
+            "before": before,
+            "after": after,
+            "unit": unit,
+        }
+
+    @callback
+    def _call_value_if_changed(
+        self,
+        domain: str,
+        service: str,
+        data: dict[str, Any],
+        *,
+        before: float | int,
+        after: float | int,
+        result: dict[str, Any],
+        force: bool = False,
+    ) -> bool:
+        """Dispatch a bounded value only when its service payload can change.
+
+        ``force`` sends it anyway, for a value that stays put while a light of
+        a multi-light binding is not yet at it.
+        """
+        if before == after and not force:
+            self._report_activity(
+                "completed",
+                result=result,
+                reason="target_unchanged",
+            )
+            return False
+        self._call(domain, service, data, result=result)
+        return True
+
+    # -- rotation ---------------------------------------------------------
+
+    @callback
+    def _rotate(self, action: WheelAction) -> None:
+        # The arriving action, before any filter. A capture that only records
+        # applied steps cannot show a notch the binding dropped on the way in,
+        # which is exactly the kind of loss worth finding.
+        suppressed = self._suppress_trailing_rotation()
+        if self._trace.enabled:
+            self._trace.describe_binding(self.trace_key, self.trace_config())
+            self._trace.record(
+                "action",
+                binding=self.trace_key,
+                notches=action.notches,
+                direction=action.direction,
+                suppressed=suppressed,
+            )
+        if suppressed:
+            return
+        # A direction reversal intentionally starts from the last desired
+        # target, not a mid-transition state echo, preventing a visible jump.
+        self._last_direction = action.direction
+        notches = self._accelerate(action.notches, action.direction)
+        up = action.direction == DIRECTION_UP
+        self._rotate_by(notches, up)
+        if self._reset_velocity_after_rotate:
+            self._reset_velocity()
+
+    def _suppress_trailing_rotation(self) -> bool:
+        """Suppress only rotations from the gesture preceding a button action."""
+        if self._suppress_scroll_through < 0:
+            return False
+        if time.monotonic() >= self._suppress_scroll_until:
+            self._suppress_scroll_through = -1
+            return False
+        if self._scroll_gesture <= self._suppress_scroll_through:
+            return True
+        self._suppress_scroll_through = -1
+        return False
+
+    @callback
+    def _rotate_by(self, notches: int, up: bool) -> bool:
+        if not self._mode_target_valid:
+            self._report_activity("skipped", reason="mode_target_mismatch")
+            self._forget_target("mode_target_mismatch")
+            self._stop_ramp(change_direction=False)
+            return False
+        if self._target_state() is None:
+            self._report_activity("skipped", reason="target_unavailable")
+            self._forget_target("target_unavailable")
+            self._stop_ramp(change_direction=False)
+            return False
+        if not self._trace.enabled:
+            return self._rotate_mode(notches, up)
+        # One row per applied step, covering every mode through the same path.
+        # `from_source` is the field worth reading first: "tracked" means the
+        # step continued our own calculation, "state" means it restarted from
+        # whatever the entity was reporting at that instant.
+        self._trace_source = None
+        self._trace_from = None
+        state = self._target_state()
+        observed = self._observed_value(state) if state is not None else None
+        changed = self._rotate_mode(notches, up)
+        self._trace.describe_binding(self.trace_key, self.trace_config())
+        self._trace.record(
+            "rotate",
+            binding=self.trace_key,
+            node_id=self._node_id,
+            channel=self._channel,
+            endpoint=self._endpoint_id,
+            notches=notches,
+            direction=DIRECTION_UP if up else "down",
+            from_source=self._trace_source,
+            from_value=None if self._trace_from is None else round(self._trace_from, 2),
+            state_value=None if observed is None else round(observed, 2),
+            target=None if self._tracked is None else round(self._tracked, 2),
+            dispatched=changed,
+        )
+        return changed
+
+    @callback
+    def _rotate_mode(self, notches: int, up: bool) -> bool:
+        if self._mode == MODE_COLOR_TEMP:
+            return self._rotate_color_temp(notches, up)
+        if self._mode == MODE_COLOR:
+            return self._rotate_color(notches, up)
+        if self._mode == MODE_VOLUME:
+            return self._rotate_volume(notches, up)
+        if self._mode == MODE_COVER:
+            return self._rotate_cover(notches, up)
+        if self._mode == MODE_TEMPERATURE:
+            return self._rotate_temperature(notches, up)
+        if self._mode == MODE_FAN:
+            return self._rotate_fan(notches, up)
+        if self._mode == MODE_NUMBER:
+            return self._rotate_number(notches, up)
+        return self._rotate_brightness(notches, up)
+
+    # -- hold-to-ramp -----------------------------------------------------
+
+    @callback
+    def _start_ramp(self) -> None:
+        if (
+            self._ramp_active
+            or not self._target
+            or not self._mode_target_valid
+            or self._target_state() is None
+        ):
+            self._report_activity("skipped", reason="ramp_unavailable")
+            return
+        self._ramp_active = True
+        self._ramp_action = self._active_action
+        changed = self._rotate_by(_RAMP_NOTCHES, self._ramp_up)
+        if not self._ramp_active:
+            return
+        if changed:
+            self._ramp_unsub = async_track_time_interval(
+                self.hass, self._ramp_tick, _RAMP_INTERVAL
+            )
+        self._ramp_watchdog_unsub = async_call_later(
+            self.hass, _RAMP_WATCHDOG_SECONDS, self._ramp_watchdog
+        )
+
+    @callback
+    def _ramp_tick(self, _now) -> None:
+        previous_action = self._active_action
+        self._active_action = self._ramp_action
+        try:
+            if not self._rotate_by(_RAMP_NOTCHES, self._ramp_up):
+                self._pause_ramp_at_limit()
+        finally:
+            self._active_action = previous_action
+
+    @callback
+    def _pause_ramp_at_limit(self) -> None:
+        """Stop recurring ticks while retaining release/watchdog accounting."""
+        if self._ramp_unsub is None:
+            return
+        self._ramp_unsub()
+        self._ramp_unsub = None
+
+    @callback
+    def _ramp_watchdog(self, _now) -> None:
+        _LOGGER.warning(
+            "Stopping hold-to-ramp after %s seconds without a release event",
+            _RAMP_WATCHDOG_SECONDS,
+        )
+        self._ramp_watchdog_unsub = None
+        self._stop_ramp(change_direction=False)
+
+    @callback
+    def _stop_ramp(self, *, change_direction: bool) -> None:
+        if (
+            not self._ramp_active
+            and self._ramp_action is None
+            and self._ramp_unsub is None
+            and self._ramp_watchdog_unsub is None
+        ):
+            return
+        if self._ramp_unsub is not None:
+            self._ramp_unsub()
+            self._ramp_unsub = None
+        if self._ramp_watchdog_unsub is not None:
+            self._ramp_watchdog_unsub()
+            self._ramp_watchdog_unsub = None
+        if change_direction and self._ramp_direction == RAMP_DIRECTION_ALTERNATE:
+            self._ramp_up = not self._ramp_up
+        self._ramp_active = False
+        self._ramp_action = None
+
+    def _accelerate(self, notches: int, direction: str | None = None) -> int:
+        return self._accelerator.accelerate(notches, direction)
+
+    def _reset_velocity(self) -> None:
+        self._accelerator.reset()
+        self._reset_velocity_after_rotate = False
+
+    def _resync(self, current: float | None, fallback: float) -> float:
+        """Return the tracked target, resyncing from reality when idle.
+
+        A multi-light binding keeps its tracked value for longer
+        (`_MULTI_RESYNC_AFTER`): the lights were all sent this value, and
+        reading it back from bulbs that acknowledge at different times is
+        exactly what made the level jump. `_forget_target` — a light settling
+        somewhere we did not send it, all of them switched off, a press that
+        changes them, a reconnect — makes the next gesture read the lights
+        again sooner.
+        """
+        now = time.monotonic()
+        window = _MULTI_RESYNC_AFTER if self._multi else _RESYNC_AFTER
+        recent = self._tracked is not None and (now - self._last) < window
+        self._last = now
+        if recent and self._tracked is not None:
+            # Recorded for the trace: which of these two branches ran is the
+            # single most useful fact when a scroll loses steps.
+            self._trace_source = "tracked"
+            self._trace_from = self._tracked
+            return self._tracked
+        value = current if current is not None else fallback
+        self._trace_source = "state" if current is not None else "fallback"
+        self._trace_from = value
+        if current is not None:
+            # Where the target stands as we start moving it: the far end of the
+            # path any report during this gesture will be travelling along.
+            # Without it, the first report from a slow target — a cover motor
+            # that has barely set off — looks like it came from nowhere.
+            if self._multi:
+                # Each light starts its own path from its own level, not from
+                # the aggregate the binding resynced to.
+                for member in self._targets:
+                    state = self._member_state(member)
+                    observed = None if state is None else self._observed_value(state)
+                    if observed is not None:
+                        self._last_reported[member] = observed
+            else:
+                self._last_reported[self._target] = current
+        self._tracked = value
+        return value
+
+    @staticmethod
+    def _delta(step_pct: float, span: float, notches: int, up: bool) -> float:
+        magnitude = step_pct / 100 * span * notches
+        return magnitude if up else -magnitude
+
+    def _brightness_step(self, value: float, notches: int, up: bool) -> float:
+        """Where `notches` of rotation land on the brightness range.
+
+        `linear` reproduces the historic arithmetic exactly, including the
+        `notches == 0` case that leaves the value alone; a test pins that so the
+        default can never drift.
+        """
+        if self._step_curve != STEP_CURVE_PERCEPTUAL:
+            return value + self._delta(self._step, 255, notches, up)
+        return perceptual_target(value, self._step, notches, up)
+
+    def _smoothing_transition(self, notches: int) -> float:
+        """Return the service transition for one batch of decoded notches.
+
+        The first dispatched batch of a scroll is never smoothed: the eager
+        first notch is the whole point of the RC.5 optimization. A first
+        batch that already bundles several notches is the firmware compressing
+        a fast flick into one jump, so it is spread proportionally to its
+        size, up to the configured transition.
+
+        Every batch after the first of the same continuous scroll receives
+        the whole configured transition. A slow scroll arrives as
+        one-to-three notch batches; scaling those by batch size shrank the
+        transition to a fraction of the configured value and made each step
+        land as a visible jump — the steppy dimming of issue #9. Repeating
+        the full duration fades each step into the next instead.
+
+        Hold-to-ramp ticks are never smoothed; the ramp keeps its own
+        cadence. The configured value is otherwise used as given: a
+        transition longer than the roughly 0.5-second spacing between
+        batches is interrupted by the next batch, which is a real effect the
+        owner can hear out during the Hardware A/B rather than something to
+        clamp away silently. Zero disables smoothing entirely.
+        """
+        if self._transition <= 0 or self._ramp_active:
+            return 0.0
+        if self._commanded_epoch == self._scroll_epoch:
+            return self._transition
+        if notches <= 1:
+            return 0.0
+        return self._transition * min(1.0, notches / _SMOOTHING_FULL_BATCH)
+
+    @callback
+    def _rotate_brightness(self, notches: int, up: bool) -> bool:
+        state = self._target_state()
+        if state is None:
+            return False
+        state_on = state.state == "on"
+        current = state.attributes.get(ATTR_BRIGHTNESS) if state_on else 0
+        tracked = self._resync(current, 0)
+        if not state_on and tracked <= 0 and not up:
+            self._report_activity("skipped", reason="light_already_off")
+            return False  # don't switch a light on by scrolling down
+
+        if not state_on and up:
+            first_step = self._brightness_step(0, 1, True)
+            start = max(self._min_units, first_step)
+            target = self._brightness_step(start, max(0, notches - 1), True)
+        else:
+            target = self._brightness_step(tracked, notches, up)
+        if target >= self._max_units:
+            target = self._max_units
+        elif target <= self._min_units:
+            if self._min_units <= 0:
+                self._set_target(0, 255)
+                self._call(
+                    "light",
+                    "turn_off",
+                    {ATTR_TRANSITION: self._smoothing_transition(notches)},
+                    result=self._value_result(
+                        "brightness",
+                        round(tracked / 255 * 100),
+                        0,
+                        "%",
+                    ),
+                )
+                return True
+            target = self._min_units
+        self._set_target(target, 255)
+        result = self._value_result(
+            "brightness",
+            round(tracked / 255 * 100),
+            round(target / 255 * 100),
+            "%",
+        )
+        return self._call_value_if_changed(
+            "light",
+            "turn_on",
+            {
+                ATTR_BRIGHTNESS: round(target),
+                ATTR_TRANSITION: self._smoothing_transition(notches),
+            },
+            before=round(tracked),
+            after=round(target),
+            result=result,
+            # At a limit the value no longer changes, but a light that is off
+            # or at another level still has to join the others.
+            force=self._multi
+            and not self._members_aligned(ATTR_BRIGHTNESS, target, 255),
+        )
+
+    @callback
+    def _rotate_color_temp(self, notches: int, up: bool) -> bool:
+        state = self._lit_state()
+        if state is None:
+            return False
+        if self._multi:
+            limits = self._shared_kelvin_range()
+            if limits is None:
+                _LOGGER.warning(
+                    "BILRESA lights %s have no colour temperature in common",
+                    ", ".join(self._targets),
+                )
+                self._report_activity("skipped", reason="kelvin_ranges_do_not_overlap")
+                return False
+            min_k, max_k = limits
+        else:
+            min_k = state.attributes.get(ATTR_MIN_KELVIN, FALLBACK_MIN_KELVIN)
+            max_k = state.attributes.get(ATTR_MAX_KELVIN, FALLBACK_MAX_KELVIN)
+        tracked = self._resync(
+            state.attributes.get(ATTR_COLOR_TEMP_KELVIN), (min_k + max_k) / 2
+        )
+        target = tracked + self._delta(self._step, max(max_k - min_k, 1), notches, up)
+        target = min(max_k, max(min_k, target))
+        self._set_target(target, max(max_k - min_k, 1))
+        result = self._value_result(
+            "color_temperature", round(tracked), round(target), "K"
+        )
+        return self._call_value_if_changed(
+            "light",
+            "turn_on",
+            {
+                ATTR_COLOR_TEMP_KELVIN: round(target),
+                ATTR_TRANSITION: self._smoothing_transition(notches),
+            },
+            before=round(tracked),
+            after=round(target),
+            result=result,
+            # At a limit a light that is off or at another level still has to
+            # join the others.
+            force=self._multi
+            and not self._members_aligned(
+                ATTR_COLOR_TEMP_KELVIN, target, max(max_k - min_k, 1)
+            ),
+        )
+
+    @callback
+    def _rotate_color(self, notches: int, up: bool) -> bool:
+        state = self._lit_state()
+        if state is None:
+            return False
+        hs_color = state.attributes.get(ATTR_HS_COLOR)
+        tracked = self._resync(hs_color[0] if hs_color else None, 0.0)
+        # A multi-light binding keeps the saturation it started with: the
+        # lights' mean changes as they acknowledge at different times, and
+        # taking it again each notch would drift the colour.
+        if hs_color and (not self._multi or self._trace_source == "state"):
+            self._saturation = float(hs_color[1])
+        hue = (tracked + self._delta(self._step, 360, notches, up)) % 360
+        self._set_target(hue, 360)
+        self._call(
+            "light",
+            "turn_on",
+            {
+                ATTR_HS_COLOR: [round(hue, 1), self._saturation],
+                ATTR_TRANSITION: self._smoothing_transition(notches),
+            },
+            result=self._value_result("hue", round(tracked, 1), round(hue, 1), "°"),
+        )
+        return True
+
+    @callback
+    def _rotate_volume(self, notches: int, up: bool) -> bool:
+        state = self._target_state()
+        if state is None:
+            return False
+        tracked = self._resync(_as_float(state.attributes.get("volume_level")), 0.5)
+        target = min(1.0, max(0.0, tracked + self._delta(self._step, 1, notches, up)))
+        self._set_target(target, 1)
+        result = self._value_result(
+            "volume", round(tracked * 100), round(target * 100), "%"
+        )
+        return self._call_value_if_changed(
+            "media_player",
+            "volume_set",
+            {"volume_level": round(target, 3)},
+            before=round(tracked, 3),
+            after=round(target, 3),
+            result=result,
+        )
+
+    @callback
+    def _rotate_cover(self, notches: int, up: bool) -> bool:
+        state = self._target_state()
+        if state is None:
+            return False
+        tracked = self._resync(_as_float(state.attributes.get("current_position")), 50)
+        target = min(
+            100, max(0, round(tracked + self._delta(self._step, 100, notches, up)))
+        )
+        self._set_target(target, 100)
+        result = self._value_result("cover_position", round(tracked), target, "%")
+        return self._call_value_if_changed(
+            "cover",
+            "set_cover_position",
+            {"position": target},
+            before=round(tracked),
+            after=target,
+            result=result,
+        )
+
+    @callback
+    def _rotate_temperature(self, notches: int, up: bool) -> bool:
+        state = self._target_state()
+        if state is None:
+            return False
+        min_t = _as_float(state.attributes.get("min_temp")) or 7.0
+        max_t = _as_float(state.attributes.get("max_temp")) or 35.0
+        temp_step = _as_float(state.attributes.get("target_temp_step")) or 0.5
+        tracked = self._resync(
+            _as_float(state.attributes.get("temperature")), (min_t + max_t) / 2
+        )
+        target = tracked + self._delta(self._step, max(max_t - min_t, 1), notches, up)
+        target = min(max_t, max(min_t, round(target / temp_step) * temp_step))
+        self._set_target(target, max(max_t - min_t, 1))
+        result = self._value_result(
+            "temperature",
+            round(tracked, 2),
+            round(target, 2),
+            str(state.attributes.get("unit_of_measurement") or "°"),
+        )
+        return self._call_value_if_changed(
+            "climate",
+            "set_temperature",
+            {"temperature": round(target, 2)},
+            before=round(tracked, 2),
+            after=round(target, 2),
+            result=result,
+        )
+
+    @callback
+    def _rotate_fan(self, notches: int, up: bool) -> bool:
+        state = self._target_state()
+        if state is None:
+            return False
+        tracked = self._resync(_as_float(state.attributes.get("percentage")), 50)
+        target = min(
+            100, max(0, round(tracked + self._delta(self._step, 100, notches, up)))
+        )
+        self._set_target(target, 100)
+        result = self._value_result("fan_speed", round(tracked), target, "%")
+        return self._call_value_if_changed(
+            "fan",
+            "set_percentage",
+            {"percentage": target},
+            before=round(tracked),
+            after=target,
+            result=result,
+        )
+
+    @callback
+    def _rotate_number(self, notches: int, up: bool) -> bool:
+        state = self._target_state()
+        if state is None:
+            return False
+        min_n = _as_float(state.attributes.get("min")) or 0.0
+        max_n = _as_float(state.attributes.get("max")) or 100.0
+        num_step = _as_float(state.attributes.get("step")) or 1.0
+        current = _as_float(state.state)
+        tracked = self._resync(current, (min_n + max_n) / 2)
+        target = tracked + self._delta(
+            self._step, max(max_n - min_n, num_step), notches, up
+        )
+        target = min(max_n, max(min_n, round(target / num_step) * num_step))
+        self._set_target(target, max(max_n - min_n, num_step))
+        domain = self._target.split(".", 1)[0]
+        result = self._value_result(
+            "number",
+            round(tracked, 4),
+            round(target, 4),
+            str(state.attributes.get("unit_of_measurement") or ""),
+        )
+        return self._call_value_if_changed(
+            domain,
+            "set_value",
+            {"value": round(target, 4)},
+            before=round(tracked, 4),
+            after=round(target, 4),
+            result=result,
+        )
+
+    def _lit_state(self) -> State | None:
+        state = self._target_state()
+        if state is None:
+            self._report_activity("skipped", reason="target_unavailable")
+            return None
+        if state.state != "on":
+            self._report_activity("skipped", reason="light_is_off")
+            return None
+        return state
+
+    def _target_state(self) -> State | None:
+        """Return the state the rotation reads, or None when out of reach.
+
+        One target is read as it is. Several lights are read as one, the way a
+        Home Assistant light group reads its members: on while any of them is
+        on, at the mean brightness and colour temperature of the lit ones and
+        at their mean hue and saturation. The values seed the tracked level
+        only when nothing is tracked; a tracked level is not read back, though
+        this is still called on every gesture to tell whether any light can be
+        reached.
+        """
+        if not self._multi:
+            return self._available_state(self._target)
+        states = [
+            state
+            for member in self._targets
+            if (state := self._available_state(member)) is not None
+        ]
+        if not states:
+            return None
+        lit = [state for state in states if state.state == "on"]
+        if not lit or time.monotonic() < self._off_intent_until:
+            return State(self._target, "off")
+        attributes: dict[str, Any] = {}
+        brightness = [
+            value
+            for state in lit
+            if (value := _as_float(state.attributes.get(ATTR_BRIGHTNESS))) is not None
+        ]
+        if brightness:
+            attributes[ATTR_BRIGHTNESS] = round(sum(brightness) / len(brightness))
+        kelvin = [
+            value
+            for state in lit
+            if (value := _as_float(state.attributes.get(ATTR_COLOR_TEMP_KELVIN)))
+            is not None
+        ]
+        if kelvin:
+            attributes[ATTR_COLOR_TEMP_KELVIN] = round(sum(kelvin) / len(kelvin))
+        colours = [
+            (float(colour[0]), float(colour[1]))
+            for state in lit
+            if (colour := state.attributes.get(ATTR_HS_COLOR))
+        ]
+        if colours:
+            attributes[ATTR_HS_COLOR] = [
+                _mean_hue([hue for hue, _saturation in colours]),
+                sum(saturation for _hue, saturation in colours) / len(colours),
+            ]
+        return State(self._target, "on", attributes)
+
+    def _shared_kelvin_range(self) -> tuple[float, float] | None:
+        """The colour temperatures every light that gets the command can reach.
+
+        Taken over every available light, lit or not, because the command goes
+        to all of them. ``None`` when their ranges do not overlap: no single
+        value suits them all, so the caller must not send one.
+        """
+        states = [self._member_state(member) for member in self._targets]
+        # A light that names no bound is assumed to have the fallback one.
+        reachable = [state for state in states if state is not None]
+        mins = [
+            _as_float(state.attributes.get(ATTR_MIN_KELVIN)) or FALLBACK_MIN_KELVIN
+            for state in reachable
+        ]
+        maxs = [
+            _as_float(state.attributes.get(ATTR_MAX_KELVIN)) or FALLBACK_MAX_KELVIN
+            for state in reachable
+        ]
+        low = max(mins, default=FALLBACK_MIN_KELVIN)
+        high = min(maxs, default=FALLBACK_MAX_KELVIN)
+        return (low, high) if low <= high else None
+
+    @callback
+    def _invalidate_tracking(self, reason: str) -> None:
+        """Drop tracked rotation state and queued commands for any binding.
+
+        A press acting on the rotation target, or an action sequence that may
+        change it, must not be followed by an older queued value.
+        """
+        self._cancel_pending_command()
+        self._forget_target(reason)
+
+    def _keeps_volume(self, domain: str | None, service: str | None) -> bool:
+        """Whether a call leaves this volume binding's queued level valid.
+
+        Playback and mute leave volume_level untouched. The power actions go
+        through homeassistant and cancel queued volume.
+        """
+        return (
+            self._mode == MODE_VOLUME
+            and domain == "media_player"
+            and service not in ("volume_set", "volume_up", "volume_down")
+        )
+
+    @callback
+    def _signal_targets_commanded(
+        self, entity_ids: Iterable[str], domain: str | None, service: str | None
+    ) -> None:
+        """Tell the other bindings which entities a press is about to change."""
+        entity_ids = tuple(entity_ids)
+        affected = [*self._targets, *([self._follower] if self._follower else [])]
+        if self._follower and not self._with_members(affected).isdisjoint(entity_ids):
+            self._advance_follower_revision()
+        async_dispatcher_send(
+            self.hass,
+            SIGNAL_TARGETS_COMMANDED,
+            self,
+            self._with_members(entity_ids),
+            domain,
+            service,
+        )
+
+    def _with_members(self, entity_ids: Iterable[str]) -> set[str]:
+        """Add the members of every scene or group, nested ones included."""
+        found: set[str] = set()
+        todo = list(entity_ids)
+        while todo:
+            entity_id = todo.pop()
+            if entity_id in found:
+                continue
+            found.add(entity_id)
+            state = self.hass.states.get(entity_id)
+            members = state.attributes.get(ATTR_ENTITY_ID) if state else None
+            if isinstance(members, (list, tuple)):
+                todo.extend(members)
+        return found
+
+    @callback
+    def _handle_targets_commanded(
+        self,
+        sender: LightBinding,
+        entity_ids: set[str],
+        domain: str | None,
+        service: str | None,
+    ) -> None:
+        """Drop a rotation still queued here for a light another binding changed.
+
+        Two bindings may control one light; without this, the older queued
+        value of one would undo the other's press. A rotation of the other
+        binding sends no signal, so two wheels dimming one light behave as
+        before.
+        """
+        if sender is self or self._keeps_volume(domain, service):
+            return
+        # A rotated group also changes when one of its lights is pressed.
+        if self._follower and self._follower in entity_ids:
+            self._advance_follower_revision()
+        if not self._with_members(self._targets).isdisjoint(entity_ids):
+            self._advance_follower_revision()
+            self._invalidate_tracking("other_binding_changed_target")
+
+    def _members_aligned(self, attribute: str, target: float, span: float) -> bool:
+        """Whether every reachable light is on and at ``target``.
+
+        A light that is off, or whose reported level differs by more than 2 %
+        of ``span``, still has to receive the value even when the value itself
+        no longer changes (at a limit, or after a light rejoined).
+        """
+        for member in self._targets:
+            state = self._member_state(member)
+            if state is None:
+                continue
+            if state.state != "on":
+                return False
+            level = _as_float(state.attributes.get(attribute))
+            if level is not None and abs(level - target) > span * 0.02:
+                return False
+        return True
+
+    def _any_member_on(self) -> bool:
+        """Whether any reachable light of this binding is on."""
+        return any(
+            (state := self._member_state(member)) is not None and state.state == "on"
+            for member in self._targets
+        )
+
+    def _member_state(self, entity_id: str) -> State | None:
+        """Read one light of a multi-light binding without logging it."""
+        state = self.hass.states.get(entity_id)
+        if state is None or state.state in _UNAVAILABLE:
+            return None
+        return state
+
+    def _available_targets(self) -> list[str]:
+        """Return the target entities a command can reach right now."""
+        return [
+            member
+            for member in self._targets
+            if self._available_state(member) is not None
+        ]
+
+    def _available_state(self, entity_id: str) -> State | None:
+        """Return an available state and log only availability transitions."""
+        state = self.hass.states.get(entity_id)
+        # A scene that was never activated reports "unknown" and still runs, as
+        # does a script and a button that was never pressed; only a missing or
+        # unavailable one is out of reach.
+        unreachable = (
+            ("unavailable",)
+            if acts_while_unknown(entity_id)
+            else ("unknown", "unavailable")
+        )
+        if state is None or state.state in unreachable:
+            if entity_id not in self._unavailable_targets:
+                self._unavailable_targets.add(entity_id)
+                _LOGGER.warning(
+                    "Skipping BILRESA action while target %s is unavailable",
+                    entity_id,
+                )
+            return None
+
+        if entity_id in self._unavailable_targets:
+            self._unavailable_targets.remove(entity_id)
+            # One light of several coming back is brought in line by the next
+            # command; forgetting would resync the others from its stale level.
+            if entity_id == self._target and not self._multi:
+                self._forget_target("target_became_available")
+            _LOGGER.info("BILRESA target %s is available again", entity_id)
+        return state
+
+    # -- button presses ---------------------------------------------------
+
+    @callback
+    def _single_press(self) -> None:
+        if self._scenes:
+            scene = self._scenes[self._scene_index]
+            # A scene may change the rotated lights, even if it is not itself
+            # the rotation target. Do not let an older dim command override it.
+            if self._targets and self._available_state(scene) is not None:
+                self._invalidate_tracking("scene_activated")
+            if self._call_entity(
+                "scene",
+                "turn_on",
+                scene,
+                result={
+                    "kind": "scene",
+                    "action": "activate",
+                    "target": scene,
+                    "position": self._scene_index + 1,
+                    "total": len(self._scenes),
+                },
+            ):
+                self._scene_index = (self._scene_index + 1) % len(self._scenes)
+            return
+        if self._click == CLICK_NONE:
+            self._report_activity("skipped", reason="short_press_not_configured")
+            return
+        self._press_target(GESTURE_SHORT_PRESS, self._click_target, self._click)
+
+    @callback
+    def _press_target(self, gesture: str, target: str | None, action: str) -> None:
+        """Carry out ``action`` on the target of one press gesture.
+
+        What the action means for this kind of entity is decided in
+        ``gesture_actions``; this only runs it and tells the activity feed.
+        """
+        if action == ACTION_RUN:
+            self._run_sequence(gesture)
+            return
+        if not target:
+            self._report_activity("skipped", reason="target_not_configured")
+            return
+        if (
+            self._multi
+            and gesture == GESTURE_SHORT_PRESS
+            and self._click_targets == self._targets
+        ):
+            self._press_all_targets(action)
+            return
+        # A verb that needs state (a mute is the opposite of what it is now)
+        # reads it here, once, and is skipped when it cannot be read.
+        state = self.hass.states.get(target)
+        call = gesture_call(target, action, state.attributes if state else None)
+        if call is None:
+            reason = (
+                "action_not_supported"
+                if not action_is_supported(target, action)
+                else "state_not_readable"
+            )
+            self._report_activity("skipped", reason=reason)
+            return
+        domain, service, data = call
+        if passes_variables(target, action):
+            data = {**data, "variables": self._script_variables(gesture)}
+        self._call_entity(
+            domain,
+            service,
+            target,
+            data=data or None,
+            result={
+                "kind": "entity_action",
+                "action": result_label(target, action),
+                "target": target,
+            },
+        )
+
+    @callback
+    def _press_all_targets(self, action: str) -> None:
+        """Press every light of a multi-light binding as one.
+
+        Pressing each light separately would invert a mixed set: the lit ones
+        off, the dark ones on. Like a light group, a toggle turns them all off
+        while any of them is on, and all on otherwise.
+        """
+        call = gesture_call(self._target, action)
+        if call is None:
+            self._report_activity("skipped", reason="action_not_supported")
+            return
+        domain, service, data = call
+        if service == "toggle":
+            state = self._target_state()
+            service = (
+                "turn_off" if state is not None and state.state == "on" else "turn_on"
+            )
+        if service == "turn_off":
+            self._off_intent_until = time.monotonic() + _OFF_INTENT_SECONDS
+        self._call_entity(
+            domain,
+            service,
+            list(self._targets),
+            data=data or None,
+            result={"kind": "entity_action", "action": service, "target": self._target},
+        )
+
+    def _run_sequence(self, gesture: str) -> None:
+        """Run the Home Assistant actions the user set for this gesture."""
+        result = {"kind": "actions", "action": "run"}
+        sequence = self._sequences.get(gesture)
+        if not sequence:
+            self._report_activity("skipped", result=result, reason="actions_missing")
+            return
+        if self._targets:
+            # A configured sequence may change any rotation target, even
+            # when the binding controls only one entity.
+            self._invalidate_tracking("actions_started")
+        action = self._active_action
+        self._report_activity("pending", result=result, action=action)
+        self.hass.async_create_task(
+            self._async_run_sequence(
+                gesture, sequence, self._script_variables(gesture), result, action
+            )
+        )
+
+    async def _async_run_sequence(
+        self,
+        gesture: str,
+        sequence: list[dict[str, Any]],
+        variables: dict[str, Any],
+        result: dict[str, Any],
+        action: WheelAction | None,
+    ) -> None:
+        """Build the script on first use and start a run of it.
+
+        The sequence is validated as an automation validates its actions, so a
+        device action or condition is resolved too. A sequence that no longer
+        validates (an integration it used was removed) is reported, not raised.
+        Runs are queued, in order, so two quick presses do not interleave; the
+        run itself is Home Assistant's, with its own trace-less logging.
+        """
+        script = self._scripts.get(gesture)
+        if script is None:
+            async with self._build_lock:
+                script = self._scripts.get(gesture)
+                if script is None:
+                    try:
+                        validated = await async_validate_actions_config(
+                            self.hass, sequence
+                        )
+                        script = Script(
+                            self.hass,
+                            validated,
+                            f"BILRESA {gesture}",
+                            DOMAIN,
+                            script_mode=SCRIPT_MODE_QUEUED,
+                            max_runs=_MAX_RUNS,
+                            logger=_LOGGER,
+                        )
+                    except (vol.Invalid, HomeAssistantError) as err:
+                        _LOGGER.warning(
+                            "BILRESA %s actions are not valid and were not run: %s",
+                            gesture,
+                            err,
+                        )
+                        self._report_activity(
+                            "failed",
+                            result=result,
+                            reason="invalid_actions",
+                            action=action,
+                        )
+                        return
+                    self._scripts[gesture] = script
+        if self._closed:
+            # Unloaded while the script was being built: nothing may start now.
+            return
+        self._signal_targets_commanded(self._sequence_entities(script), None, None)
+        self.hass.async_create_task(
+            script.async_run(run_variables=variables, context=Context())
+        )
+        self._report_activity("accepted", result=result, action=action)
+
+    def _sequence_entities(self, script: Script) -> set[str]:
+        """The entities a run of actions names, and those of its areas,
+        devices, floors and labels.
+
+        shortcut: an entity a template picks at run time is not known here;
+        resolve the run's own service calls if that is ever needed.
+        """
+        selected = async_extract_referenced_entity_ids(
+            self.hass,
+            TargetSelection(
+                {
+                    ATTR_AREA_ID: list(script.referenced_areas),
+                    ATTR_DEVICE_ID: list(script.referenced_devices),
+                    ATTR_FLOOR_ID: list(script.referenced_floors),
+                    ATTR_LABEL_ID: list(script.referenced_labels),
+                }
+            ),
+        )
+        return (
+            script.referenced_entities
+            | selected.referenced
+            | selected.indirectly_referenced
+        )
+
+    @callback
+    def _stop_sequences(self) -> None:
+        """Stop whatever the gesture actions are still doing (on unload)."""
+        self._closed = True
+        for script in self._scripts.values():
+            self.hass.async_create_task(script.async_stop())
+        self._scripts.clear()
+
+    def _script_variables(self, gesture: str) -> dict[str, Any]:
+        """What a script started by a gesture is told about it.
+
+        Lets one script serve several buttons: it can branch on the gesture,
+        the press count or the channel.
+        """
+        active = self._active_action
+        return {
+            "gesture": gesture,
+            "presses": active.presses if active is not None else 0,
+            "channel": self._channel,
+            "endpoint": self._endpoint_id,
+            "device": (active.wheel_name if active is not None else "")
+            or self._device_name(),
+        }
+
+    # -- service helpers --------------------------------------------------
+
+    @callback
+    def _call(
+        self,
+        domain: str,
+        service: str,
+        data: dict[str, Any],
+        *,
+        result: dict[str, Any],
+    ) -> None:
+        """Send an absolute value, coalescing bursts into one call.
+
+        A fast scroll can calculate a new target every hundred milliseconds.
+        Captured on a Shelly Plus 0-10V: fourteen calls in 4.3 seconds and the
+        device stopped acknowledging for seventeen, ending 68 units away from
+        the value it was last sent — the commands never landed.
+
+        Because every value here is absolute, intermediate ones are redundant:
+        sending only the newest reaches the same place. So the first command of
+        a burst goes immediately — the eager response is the point of this
+        integration — and further ones inside the interval replace a pending
+        send rather than adding to it. A pending send always fires, so the last
+        target of a gesture can never be the one that gets dropped.
+        """
+        if self._target_state() is None:
+            self._report_activity("skipped", result=result, reason="target_unavailable")
+            return
+        now = time.monotonic()
+        elapsed = (
+            float("inf")
+            if self._last_command_at is None
+            else now - self._last_command_at
+        )
+        if self._min_command_interval > 0 and elapsed < self._min_command_interval:
+            # Replace whatever was queued: an older absolute value has no
+            # value of its own once a newer one exists.
+            self._pending_command = (domain, service, data, result)
+            self._trace.record(
+                "coalesced",
+                binding=self.trace_key,
+                domain=domain,
+                service=service,
+                waited=round(self._min_command_interval - elapsed, 3),
+            )
+            if self._pending_unsub is None:
+                self._pending_unsub = async_call_later(
+                    self.hass,
+                    self._min_command_interval - elapsed,
+                    self._flush_pending_command,
+                )
+            return
+        self._last_command_at = now
+        self._dispatch_call(domain, service, data, result)
+
+    @callback
+    def _flush_pending_command(self, _now=None) -> None:
+        """Send the newest queued value once the interval has passed."""
+        self._pending_unsub = None
+        pending = self._pending_command
+        self._pending_command = None
+        if pending is None:
+            return
+        self._last_command_at = time.monotonic()
+        self._dispatch_call(*pending)
+
+    @callback
+    def _cancel_pending_command(self) -> None:
+        self._advance_follower_revision()
+        if self._pending_unsub is not None:
+            self._pending_unsub()
+            self._pending_unsub = None
+        self._pending_command = None
+
+    def _advance_follower_revision(self) -> int:
+        """Invalidate older follower work shared by bindings of one light."""
+        if not self._follower:
+            return 0
+        revisions = self.hass.data.setdefault(f"{DOMAIN}_follower_revisions", {})
+        revisions[self._follower] = revisions.get(self._follower, 0) + 1
+        return revisions[self._follower]
+
+    @callback
+    def _dispatch_call(
+        self,
+        domain: str,
+        service: str,
+        data: dict[str, Any],
+        result: dict[str, Any],
+    ) -> None:
+        transition = _as_float(data.get(ATTR_TRANSITION)) or 0.0
+        # The scroll epoch this command belongs to. The next batch of the
+        # same scroll is a follow-up, so smoothing treats it accordingly.
+        self._commanded_epoch = self._scroll_epoch
+        self._command_authoritative_until = (
+            time.monotonic() + transition + _STATE_ECHO_MARGIN
+        )
+        # One value, every light: a multi-light binding never commands its
+        # members individually, so they cannot drift apart. A light that is
+        # unavailable right now is left out rather than failing the call.
+        entity_ids: str | list[str] = (
+            self._available_targets() if self._multi else self._target
+        )
+        if service != "turn_off":
+            self._off_intent_until = 0.0
+        self._command_seq += 1
+        payload = {ATTR_ENTITY_ID: entity_ids, **data}
+        action = self._active_action
+        self._report_activity("pending", result=result, action=action)
+        follower_brightness = data.get(ATTR_BRIGHTNESS)
+        has_follower = (
+            self._follower
+            and self._mode == MODE_BRIGHTNESS
+            and domain == "light"
+            and service == "turn_on"
+            and isinstance(follower_brightness, (int, float))
+        )
+        service_call = self.hass.services.async_call(
+            domain, service, payload, blocking=bool(has_follower)
+        )
+        if has_follower:
+            revision = self._advance_follower_revision()
+            self.hass.async_create_task(
+                self._async_dispatch_with_follower(
+                    service_call,
+                    result,
+                    action,
+                    self._command_seq,
+                    revision,
+                    float(follower_brightness),
+                    transition,
+                )
+            )
+        else:
+            self.hass.async_create_task(
+                self._async_dispatch_service(
+                    domain,
+                    service,
+                    service_call,
+                    result=result,
+                    action=action,
+                    seq=self._command_seq,
+                )
+            )
+
+    async def _async_dispatch_with_follower(
+        self,
+        primary: Awaitable[Any],
+        result: dict[str, Any],
+        action: WheelAction | None,
+        seq: int,
+        revision: int,
+        brightness: float,
+        transition: float,
+    ) -> None:
+        """Follow a successful current brightness dispatch only while on."""
+        accepted = await self._async_dispatch_service(
+            "light", "turn_on", primary, result=result, action=action, seq=seq
+        )
+        revisions = self.hass.data.get(f"{DOMAIN}_follower_revisions", {})
+        if not accepted or revisions.get(self._follower) != revision:
+            return
+        follower_state = self.hass.states.get(self._follower)
+        if follower_state is None or follower_state.state != "on":
+            return
+        percent = max(
+            self._follower_min,
+            min(100.0, brightness / 255 * 100 + self._follower_offset),
+        )
+        try:
+            await self.hass.services.async_call(
+                "light",
+                "turn_on",
+                {
+                    ATTR_ENTITY_ID: self._follower,
+                    "brightness_pct": round(percent),
+                    ATTR_TRANSITION: transition,
+                },
+                blocking=True,
+            )
+        except Exception as err:
+            _LOGGER.warning("BILRESA follower dispatch failed: %s", type(err).__name__)
+
+    @callback
+    def _call_entity(
+        self,
+        domain: str,
+        service: str,
+        entity_id: str | list[str],
+        *,
+        data: dict[str, Any] | None = None,
+        result: dict[str, Any],
+    ) -> bool:
+        if isinstance(entity_id, list):
+            entity_id = [e for e in entity_id if self._available_state(e) is not None]
+            if not entity_id:
+                self._report_activity(
+                    "skipped", result=result, reason="target_unavailable"
+                )
+                return False
+            if self._click_target in entity_id:
+                self._log_latency_stage("service_dispatch")
+        elif self._available_state(entity_id) is None:
+            self._report_activity("skipped", result=result, reason="target_unavailable")
+            return False
+        elif entity_id == self._click_target:
+            self._log_latency_stage("service_dispatch")
+        # Only discard queued rotation once the press can actually be sent.
+        # A skipped/unavailable target must not erase a pending command.
+        dispatched_targets = entity_id if isinstance(entity_id, list) else [entity_id]
+        if any(
+            target in self._targets for target in dispatched_targets
+        ) and not self._keeps_volume(domain, service):
+            self._invalidate_tracking("press_changed_target")
+        self._signal_targets_commanded(dispatched_targets, domain, service)
+        action = self._active_action
+        self._report_activity("pending", result=result, action=action)
+        self._command_seq += 1
+        service_call = self.hass.services.async_call(
+            domain,
+            service,
+            {ATTR_ENTITY_ID: entity_id, **(data or {})},
+            blocking=False,
+        )
+        self.hass.async_create_task(
+            self._async_dispatch_service(
+                domain,
+                service,
+                service_call,
+                result=result,
+                action=action,
+                seq=self._command_seq,
+            )
+        )
+        return True
+
+    async def _async_dispatch_service(
+        self,
+        domain: str,
+        service: str,
+        service_call: Awaitable[Any],
+        *,
+        result: dict[str, Any],
+        action: WheelAction | None,
+        seq: int | None = None,
+    ) -> bool:
+        """Report whether Home Assistant accepted this exact service action.
+
+        Ordinary calls are non-blocking. A follower binding waits for the
+        primary service handler before dispatching the follower. Neither result
+        proves that the physical target reached the requested state.
+        """
+        try:
+            await service_call
+        except Exception as err:
+            _LOGGER.warning(
+                "BILRESA service dispatch failed: %s.%s (%s)",
+                domain,
+                service,
+                type(err).__name__,
+            )
+            if (
+                (self._multi or self._follower)
+                and self._pending_command is None
+                and (seq is None or seq == self._command_seq)
+            ):
+                # The lights never got the tracked level; reading them again
+                # beats carrying a value none of them has. A newer call has
+                # replaced that level, so only the newest one decides.
+                self._forget_target("service_dispatch_failed")
+            self._report_activity(
+                "failed",
+                result=result,
+                reason=type(err).__name__,
+                action=action,
+            )
+            return False
+        self._report_activity("accepted", result=result, action=action)
+        return True

@@ -1,0 +1,1109 @@
+"""User-facing strings for the panel, in every language it speaks.
+
+**Why these are not in `strings.json`.** Home Assistant's translation files have
+fixed categories — `config`, `selector`, `system_health`, `issues`,
+`device_automation` — and none of them describes a custom panel. HA has no
+translation category for one. Inventing a category risks hassfest, and the
+frontend would not fetch it anyway.
+
+`PANEL_ROADMAP.md` requires English and Czech to stay aligned. Two JSON files in
+two directories is precisely how they drift: someone adds an English key and the
+Czech one silently falls back or vanishes. Here the two languages sit on adjacent
+lines, and `test_panel_strings.py` fails the build if one gains a key the other
+lacks. Alignment by construction rather than by discipline.
+
+The language is `hass.config.language` — the instance's, not the individual
+user's. Home Assistant has no per-user language available to a WebSocket handler
+or to panel registration, so a household where one person reads English and
+another Czech gets one of them. Recorded as a known limitation rather than
+pretended away; revisit if HA exposes a per-connection locale.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+DEFAULT_LANGUAGE = "en"
+
+# Both languages adjacent, deliberately. Add a key to one, add it to the other.
+STRINGS: dict[str, dict[str, str]] = {
+    "en": {
+        # status
+        "connected": "Connected",
+        "unavailable": "Unavailable",
+        "unknown": "Not reporting",
+        # channels
+        "not_configured": "Not configured",
+        "add_binding": "Add a control binding",
+        "edit_binding": "Edit binding",
+        "community_tool_link": "Design labels for your switches",
+        "community_tool_note": "Community tool by Liquidmasl",
+        "community_tool_new_window": "opens in a new window",
+        "save_short": "Save",
+        "discard_changes": "Discard",
+        "discard_armed": "Discard?",
+        "target_unavailable": "{target} — unavailable",
+        "target_missing": "{target} — no longer exists",
+        "configured": "Configured",
+        "button_actions": "Button actions",
+        "multiple_targets": "{count} targets",
+        # scroll modes — what a rotation does
+        "mode_brightness": "Smooth dimming",
+        "mode_color_temp": "Colour temperature",
+        "mode_color": "Colour",
+        "mode_volume": "Volume",
+        "mode_cover_position": "Cover position",
+        "mode_temperature": "Temperature",
+        "mode_fan_speed": "Fan speed",
+        "mode_number": "Value",
+        "mode_scenes": "Scenes ({count})",
+        # what a rotation changes — the gesture ledger names the quantity, while
+        # the channel subtitle above it names the mode, so they must not repeat
+        "quantity_brightness": "Brightness",
+        "quantity_color_temp": "White temperature",
+        "quantity_color": "Colour",
+        "quantity_volume": "Volume",
+        "quantity_cover_position": "Position",
+        "quantity_temperature": "Temperature",
+        "quantity_fan_speed": "Speed",
+        "quantity_number": "Value",
+        # wheel card
+        "no_activity": "No activity yet",
+        "last_on_channel": "last on channel {channel}",
+        "last_on_button": "last on button {button}",
+        # summary
+        "overview_title": "BILRESA devices",
+        "summary_connected": "{count} connected",
+        "summary_unavailable": "{count} unavailable",
+        "summary_unknown": "{count} not reporting",
+        "matter_connected": "Matter connected",
+        "matter_offline": "Matter offline",
+        # banners
+        "banner_matter_offline": (
+            "Matter is disconnected. The devices below show their last known state."
+        ),
+        "banner_updates_stopped": "Live updates stopped. This view may be out of date.",
+        "banner_target_missing": (
+            "Bindings on {count} devices point to entities that no longer exist "
+            "in Home Assistant. Open a marked control and choose another target."
+        ),
+        "banner_target_missing_named": (
+            "The binding on channel {channel} of {wheel} points to an entity "
+            "that no longer exists in Home Assistant. Open the channel and "
+            "choose another target."
+        ),
+        "banner_target_missing_button_named": (
+            "The binding on button {button} of {wheel} points to an entity "
+            "that no longer exists in Home Assistant. Open the button and "
+            "choose another target."
+        ),
+        # states
+        "empty_title": "No BILRESA devices found",
+        "empty_connected": (
+            "The integration is connected but has not discovered a device yet."
+        ),
+        "empty_offline": (
+            "Home Assistant is not connected to Matter, so no device can be seen."
+        ),
+        "error_title": "Cannot reach the integration",
+        "retry": "Try again",
+        # detail
+        "back": "Back to all BILRESA devices",
+        "detail_views": "Device detail views",
+        "field_step_curve": "Step placement",
+        "field_step_curve_help": (
+            "If fast scrolling looks like it jumps, especially near the bottom "
+            "of the range, switch to perceptual and scroll again. Leave it "
+            "linear if the lamp already evens out its own dimming — correcting "
+            "twice is worse than not correcting at all."
+        ),
+        "step_curve_linear": "Linear (default)",
+        "step_curve_perceptual": "Perceptual (even to the eye)",
+        "channel_off_note": "it does nothing until you switch it back on here.",
+        "settings_dial_intro": (
+            "Each channel's number entity (1 to 100): turning the wheel moves it "
+            "and automations can read it. It does not affect the binding."
+        ),
+        "settings_dial_title": "Dial",
+        "settings_step_help": "In the dial's own units, 1 to 100.",
+        "settings_channel_enabled": "Channel {channel} active",
+        "settings_step": "Dial change per notch",
+        "settings_acceleration": "Dial acceleration",
+        "settings_acceleration_help": (
+            "Turning faster moves the dial further per notch. 0 % switches it off."
+        ),
+        "settings_save": "Save dial",
+        "settings_saved": "Dial saved",
+        "settings_disabled_badge": "Off",
+        "settings_error_conflict": (
+            "These settings were changed elsewhere. Reopen the wheel and try again."
+        ),
+        "settings_error_generic": "The settings could not be saved.",
+        "tab_channels": "Channels",
+        "tab_buttons": "Buttons",
+        "tab_live": "Live test",
+        "tab_diagnostics": "Diagnostics",
+        "detail_area_none": "No area",
+        "detail_last_activity": "Last activity",
+        "detail_last_channel": "Last active channel",
+        "detail_no_last_channel": "No channel observed yet",
+        "detail_last_button": "Last active button",
+        "detail_no_last_button": "No button observed yet",
+        "detail_channels_heading": "Physical position behaviour",
+        "channel_title": "Channel {channel}",
+        "channel_binding": "Binding",
+        "button_title": "Button {button}",
+        "target_none": "No target configured",
+        # A wheel's short press falls back to the rotation target when this is
+        # left empty, so the placeholder must not claim nothing happens.
+        "target_same_as_rotation": "Same as the rotation target",
+        # binding editor
+        "binding_editor_title": "Edit channel {channel} binding",
+        "binding_editor_button_title": "Edit button {button} binding",
+        "field_mode": "Mode",
+        "field_target": "Target",
+        "field_target_help": (
+            "Choose several lights to control them together. They all receive "
+            "the same value, set by the wheel."
+        ),
+        "field_step": "Target change per notch",
+        "field_step_help": "How far one notch moves the target.",
+        "field_acceleration": "Rotation acceleration",
+        "field_acceleration_help": (
+            "Turning faster moves the target further per notch. 0 % switches it off."
+        ),
+        "field_transition_help": (
+            "Fast rotation arrives in batches of notches. A larger batch is "
+            "spread over up to this long; 0 s turns smoothing off."
+        ),
+        "target_empty_is_rotation": "Leave empty to use the rotation target.",
+        "scene_add": "Add a scene",
+        "scene_add_placeholder": "Add a scene…",
+        "scene_move_up": "Move {scene} up",
+        "scene_move_down": "Move {scene} down",
+        "scene_remove": "Remove {scene}",
+        "ledger_then_release": "{hold}; on release: {release}",
+        "field_transition": "Smoothing of large jumps",
+        "field_follower_light": "Follower light (optional)",
+        "field_follower_help": "Only follows brightness while already on.",
+        "field_follower_offset": "Follower offset (percentage points)",
+        "field_follower_min": "Follower minimum brightness",
+        "field_min_brightness": "Minimum brightness",
+        "field_max_brightness": "Maximum brightness",
+        "field_press_response": "Response",
+        "rotation_more": "More rotation settings",
+        "gesture_needs_waiting": "Needs the short-press response “{response}”.",
+        "gesture_action": "Action",
+        "gesture_target": "Target",
+        "field_ramp_direction": "Ramp direction",
+        "field_scenes": "Scenes",
+        "field_scenes_help": (
+            "Each short press activates the next scene, in this order."
+        ),
+        "section_rotation": "Rotation",
+        "click_toggle": "Toggle target",
+        "click_on": "Turn target on",
+        "click_off": "Turn target off",
+        "click_none": "No action",
+        "click_scenes": "Cycle scenes",
+        "click_scene_on": "Run scene",
+        "click_script_on": "Run script",
+        "click_script_off": "Stop script",
+        "click_script_toggle": "Toggle script",
+        "click_play_pause": "Play / pause",
+        "click_play": "Play",
+        "click_pause": "Pause",
+        "click_stop": "Stop",
+        "click_next": "Next track",
+        "click_previous": "Previous track",
+        "click_volume_up": "Volume up",
+        "click_volume_down": "Volume down",
+        "click_mute_toggle": "Mute / unmute",
+        "click_open": "Open",
+        "click_close": "Close",
+        "click_lock": "Lock",
+        "click_start": "Start",
+        "click_return_home": "Return to dock",
+        "click_locate": "Locate",
+        "click_press": "Press the button",
+        "click_trigger": "Run the automation",
+        "click_speed_up": "Speed up",
+        "click_speed_down": "Slow down",
+        "click_next_option": "Next option",
+        "click_previous_option": "Previous option",
+        "click_first_option": "First option",
+        "click_last_option": "Last option",
+        "click_step_up": "Increase",
+        "click_step_down": "Decrease",
+        "cover_open_warning": (
+            "A garage door or a gate opens when this is pressed, with nobody watching."
+        ),
+        "script_run_help": (
+            "Starts the script and tells it which gesture started it, in the "
+            "variables gesture, presses, channel, endpoint and device."
+        ),
+        "script_toggle_help": (
+            "Starts the script, or stops it if it is running. A toggle cannot "
+            "pass the script any variables."
+        ),
+        "gesture_hold_effect": "Effect on the target",
+        "hold_toggle": "Act on the hold target",
+        "hold_ramp": "Ramp rotation target",
+        "hold_none": "No action",
+        "ramp_direction_alternate": "Alternate up and down",
+        "ramp_direction_up": "Always brighten",
+        "ramp_direction_down": "Always dim",
+        "button_response_instant": "Run on initial press",
+        "button_response_fast": "Run after the first short release",
+        "button_response_multi_press": "Wait for single/double/triple press",
+        "dual_button_response_instant": "Run on initial press",
+        "dual_button_response_fast": "Run after the first short release",
+        "dual_button_response_multi_press": "Wait for single or double press",
+        "save_binding": "Save binding",
+        "delete_binding": "Delete binding",
+        "keep_binding": "Keep binding",
+        "delete_binding_confirm": (
+            "Delete this channel binding? The wheel will stop controlling its targets."
+        ),
+        "delete_button_binding_confirm": (
+            "Delete this button binding? The button will stop controlling its targets."
+        ),
+        "binding_saved": "Binding saved and activated.",
+        "binding_validation_failed": "Fix the marked fields and save again.",
+        "binding_conflict": (
+            "This binding changed elsewhere. The latest saved values are shown; "
+            "review them before saving."
+        ),
+        "binding_save_failed": "Could not save the binding: {error}",
+        "binding_delete_failed": "Could not delete the binding: {error}",
+        "binding_test_failed": "Could not run the test: {error}",
+        "binding_error_unloaded": "The integration is not loaded.",
+        "binding_error_wheel_missing": "The wheel is no longer available.",
+        "binding_error_binding_missing": "The binding no longer exists.",
+        "binding_error_channel_occupied": (
+            "This wheel channel already has another binding."
+        ),
+        "binding_error_button_occupied": ("This button already has another binding."),
+        "binding_error_control_mismatch": (
+            "This control does not belong to the selected BILRESA device."
+        ),
+        "binding_error_control_missing": "This control is no longer available.",
+        "binding_error_binding_address_mismatch": (
+            "This binding belongs to another control. Reload the panel and try again."
+        ),
+        "binding_error_gesture_unsupported": (
+            "This BILRESA device does not support that gesture."
+        ),
+        "binding_error_binding_not_configured": (
+            "Configure this control before testing it."
+        ),
+        "validation_invalid_value": "Choose or enter a valid value.",
+        "validation_target_required": "Choose a target.",
+        "validation_ramp_requires_light": "Ramping needs a light as the hold target.",
+        "validation_scene_cannot_turn_off": (
+            "A scene can only be run, not turned off. "
+            "Choose Toggle target or Turn target on."
+        ),
+        "validation_scenes_required": "Add at least one scene.",
+        "validation_action_not_supported": (
+            "This target cannot do that. Choose one of the actions listed for it."
+        ),
+        "validation_actions_required": (
+            "Add at least one action to run, or choose another action."
+        ),
+        "validation_actions_incomplete": "Choose an action for every row.",
+        "validation_actions_invalid": (
+            "What you typed in the actions is not valid. Correct it or reload."
+        ),
+        "validation_scenes_replace_short_press": (
+            "Cycling scenes replaces the short press, so it cannot run actions."
+        ),
+        "validation_mode_target_mismatch": (
+            "The selected rotation mode cannot control this entity."
+        ),
+        "validation_multiple_targets_require_light_mode": (
+            "Several targets work only for lights in a dimming, colour "
+            "temperature or colour mode."
+        ),
+        "validation_maximum_must_exceed_minimum": (
+            "Maximum brightness must be greater than minimum brightness."
+        ),
+        "validation_fast_response_conflicts_with_multi_press": (
+            "Fast release cannot be combined with double or triple press."
+        ),
+        "validation_instant_response_conflicts_with_multi_press": (
+            "Instant response cannot be combined with double or triple press."
+        ),
+        "validation_instant_response_conflicts_with_hold": (
+            "Instant response requires the hold action to be set to No action."
+        ),
+        "binding_gesture_rotation": "Rotate left / right",
+        "binding_gesture_short_press": "Short press",
+        "binding_gesture_double_press": "Double press",
+        "binding_gesture_triple_press": "Triple press",
+        "binding_gesture_hold": "Hold",
+        "binding_gesture_release": "Release",
+        "action_toggle": "Toggle",
+        "action_turn_on": "Turn on",
+        "action_turn_off": "Turn off",
+        "action_run": "Run",
+        "action_stop": "Stop",
+        "action_none": "No action",
+        "action_run_actions": "Run actions",
+        "click_run": "Run actions",
+        "hold_run": "Run actions",
+        "actions_label": "Actions to run",
+        "actions_help": (
+            "Written as in an automation. The gesture is passed to them as the "
+            "variables gesture, presses, channel, endpoint and device."
+        ),
+        "actions_loading": "Loading Home Assistant's action editor...",
+        "actions_fallback": (
+            "Home Assistant's action editor is not available here, so the "
+            "actions are edited as a simple list. It is the same data: nothing "
+            "is lost."
+        ),
+        "actions_empty": "No actions yet.",
+        "actions_add": "Add an action",
+        "actions_remove": "Remove",
+        "actions_service": "Action",
+        "actions_target_ids": "Entities, separated by commas",
+        "actions_data": "Data (JSON)",
+        "actions_json": "All actions as JSON",
+        "actions_json_invalid": "This is not valid JSON of the expected kind.",
+        "actions_choose": "Choose an action",
+        "actions_complex": "A more complex action; edit it in the JSON below:",
+        "action_cycle_scenes": "Cycle scenes",
+        "action_ramp": "Ramp target",
+        "action_ramp_alternate": "Ramp up or down",
+        "action_ramp_up": "Brighten",
+        "action_ramp_down": "Dim",
+        "action_stop_ramp": "Stop ramp",
+        "action_play_pause": "Play / pause",
+        "action_play": "Play",
+        "action_pause": "Pause",
+        "action_next": "Next track",
+        "action_previous": "Previous track",
+        "action_volume_up": "Volume up",
+        "action_volume_down": "Volume down",
+        "action_mute_toggle": "Mute / unmute",
+        "action_open": "Open",
+        "action_close": "Close",
+        "action_lock": "Lock",
+        "action_start": "Start",
+        "action_return_home": "Return to dock",
+        "action_locate": "Locate",
+        "action_press": "Press the button",
+        "action_trigger": "Run the automation",
+        "action_speed_up": "Speed up",
+        "action_speed_down": "Slow down",
+        "action_next_option": "Next option",
+        "action_previous_option": "Previous option",
+        "action_first_option": "First option",
+        "action_last_option": "Last option",
+        "action_step_up": "Increase",
+        "action_step_down": "Decrease",
+        "wheel_missing_title": "BILRESA device no longer available",
+        "wheel_missing_body": (
+            "The device was removed or the integration reloaded. Return to the "
+            "overview."
+        ),
+        # live test
+        "live_intro": (
+            "Turn or press the wheel. You will see the recognized gesture first "
+            "and, for configured channels, the action sent to its target."
+        ),
+        "live_button_intro": (
+            "Press either button. You will see the recognized gesture first and, "
+            "for configured buttons, the action sent to its target."
+        ),
+        "live_result_label": "Action result",
+        "live_event_label": "Latest gesture",
+        "live_listening": "Listening",
+        "live_stopped": "Listening stopped",
+        "live_waiting_title": "Waiting for the wheel",
+        "live_waiting_body": (
+            "Turn or press this wheel. Activity appears only while this view is open."
+        ),
+        "live_button_waiting_title": "Waiting for a button press",
+        "live_button_waiting_body": (
+            "Press, double-press or hold either button. Activity appears only while "
+            "this view is open."
+        ),
+        "live_error": (
+            "Live activity stopped. Leave and reopen Live test to try again."
+        ),
+        "result_unavailable": "Gesture recognized",
+        "result_unavailable_detail": (
+            "No detailed result is available for this event."
+        ),
+        "result_pending_detail": "Waiting for the configured action to finish.",
+        "result_not_configured_channel_detail": ("The gesture reached Home Assistant."),
+        "result_not_configured_button_detail": ("The gesture reached Home Assistant."),
+        "result_gesture_rotate": "Rotation recognized",
+        "result_gesture_press": "Press recognized",
+        "result_gesture_double_press": "Double press recognized",
+        "result_gesture_triple_press": "Triple press recognized",
+        "result_gesture_hold": "Hold recognized",
+        "result_gesture_release": "Release recognized",
+        "result_gesture_received": "Gesture recognized",
+        "dispatch_success": "Action dispatched",
+        "dispatch_accepted": "Home Assistant accepted the action",
+        "dispatch_pending": "Sending action to Home Assistant",
+        "dispatch_skipped": "Binding skipped the action",
+        "dispatch_not_configured": "This channel does not control anything yet",
+        "dispatch_not_configured_button": ("This button does not control anything yet"),
+        "dispatch_completed": "Binding action completed",
+        "dispatch_received": "Gesture received; waiting for the result",
+        "dispatch_failed": "Action not dispatched",
+        "dispatch_unknown": "Action status is not available",
+        "result_kind_brightness": "Brightness",
+        "result_kind_color_temperature": "Colour temperature",
+        "result_kind_color": "Colour",
+        "result_kind_volume": "Volume",
+        "result_kind_position": "Position",
+        "result_kind_temperature": "Temperature",
+        "result_kind_fan_speed": "Fan speed",
+        "result_kind_value": "Value",
+        "result_scene": "Scene {position}/{total} · {target}",
+        "result_entity_action": "{action} · {target}",
+        "result_ramp_stopped": "Hold ramp stopped",
+        "result_fast_press_complete": "Single press dispatched immediately",
+        "service_toggle": "Toggle",
+        "service_turn_on": "Turn on",
+        "service_turn_off": "Turn off",
+        "service_run": "Run",
+        "service_stop": "Stop",
+        "source_panel_test": "Triggered from the panel test controls",
+        "test_controls_heading": "Test configured actions",
+        "test_controls_intro": (
+            "These controls run the real binding without a physical wheel. They can "
+            "change target entities immediately."
+        ),
+        "test_controls_button_intro": (
+            "These controls run the real binding without pressing the physical "
+            "button. They can change target entities immediately."
+        ),
+        "test_channel": "Test channel {channel}",
+        "test_button": "Test button {button}",
+        "test_rotate_down": "Rotate down",
+        "test_rotate_up": "Rotate up",
+        "test_single": "Single press",
+        "test_double": "Double press",
+        "test_triple": "Triple press",
+        "test_hold": "Start hold",
+        "test_release": "Release hold",
+        "test_no_bindings": "Configure a channel to enable panel tests.",
+        "test_no_button_bindings": "Configure a button to enable panel tests.",
+        "direction_up": "up",
+        "direction_down": "down",
+        "gesture_rotate": "Channel {channel} · rotate {direction} · {delta} steps",
+        "gesture_press_single": "Channel {channel} · single press",
+        "gesture_press_double": "Channel {channel} · double press",
+        "gesture_press_triple": "Channel {channel} · triple press",
+        "gesture_hold": "Channel {channel} · hold",
+        "gesture_release": "Channel {channel} · release",
+        "gesture_unknown": "Channel {channel} · activity received",
+        "live_channels_heading": "Channels",
+        "gesture_button_press_single": "Button {button} · single press",
+        "gesture_button_press_double": "Button {button} · double press",
+        "gesture_button_hold": "Button {button} · hold",
+        "gesture_button_release": "Button {button} · release",
+        "gesture_button_unknown": "Button {button} · activity received",
+        "gesture_observed_duration": "{duration} s observed",
+        "live_buttons_heading": "Buttons",
+        "live_recent": "Latest events",
+        "live_setup_channel": "Configure channel {channel}",
+        "live_setup_button": "Configure button {button}",
+        # diagnostics
+        "diagnostics_heading": "Device status",
+        "diagnostics_intro": (
+            "Read-only status from Home Assistant. Private Matter identifiers are "
+            "not shown."
+        ),
+        "diagnostic_availability": "Device availability",
+        "diagnostic_matter": "Matter connection",
+        "diagnostic_source": "Event source",
+        "diagnostic_link": "Matter device link",
+        "diagnostic_linked": "Linked",
+        "diagnostic_not_linked": "Not linked",
+        "diagnostic_health_ok": "Wheel is ready",
+        "diagnostic_health_attention": "Wheel needs attention",
+        "diagnostic_health_ok_body": ("Matter and live event delivery are connected."),
+        "diagnostic_connection_heading": "Connection",
+        "diagnostic_activity_heading": "Activity",
+        "diagnostic_technical_details": "Technical details",
+        "diagnostic_contract": "Panel contract",
+        "source_core": "Home Assistant Matter client",
+        "source_fallback": "Passive WebSocket fallback",
+        "source_unloaded": "Integration unloaded",
+        "recovery_heading": "Recommended action",
+        "recovery_ok": "No recovery action is needed.",
+        "recovery_matter": (
+            "Check the Matter integration and the Matter Server connection."
+        ),
+        "recovery_unavailable": (
+            "Check the wheel battery and bring it closer to the Matter network."
+        ),
+        "recovery_unknown": (
+            "Check that the wheel is present in Home Assistant, then reload the "
+            "integration."
+        ),
+        # a11y
+        "menu": "Open Home Assistant sidebar",
+    },
+    "cs": {
+        "connected": "Připojeno",
+        "unavailable": "Nedostupné",
+        "unknown": "Nehlásí se",
+        "not_configured": "Nenastaveno",
+        "add_binding": "Přidat propojení",
+        "edit_binding": "Upravit propojení",
+        "community_tool_link": "Navrhnout štítky pro spínače",
+        "community_tool_note": "Komunitní nástroj od Liquidmasl",
+        "community_tool_new_window": "otevře se v novém okně",
+        "save_short": "Uložit",
+        "discard_changes": "Zahodit",
+        "discard_armed": "Zahodit?",
+        "target_unavailable": "{target} — nedostupné",
+        "target_missing": "{target} — už neexistuje",
+        "configured": "Nastaveno",
+        "button_actions": "Akce tlačítka",
+        "multiple_targets": "{count} cíle",
+        "mode_brightness": "Plynulé stmívání",
+        "mode_color_temp": "Teplota bílé",
+        "mode_color": "Barva",
+        "mode_volume": "Hlasitost",
+        "mode_cover_position": "Poloha krytu",
+        "mode_temperature": "Teplota",
+        "mode_fan_speed": "Rychlost ventilátoru",
+        "mode_number": "Hodnota",
+        "mode_scenes": "Scény ({count})",
+        "quantity_brightness": "Jas",
+        "quantity_color_temp": "Teplota bílé",
+        "quantity_color": "Barva",
+        "quantity_volume": "Hlasitost",
+        "quantity_cover_position": "Poloha",
+        "quantity_temperature": "Teplota",
+        "quantity_fan_speed": "Otáčky",
+        "quantity_number": "Hodnota",
+        "no_activity": "Zatím žádná aktivita",
+        "last_on_channel": "naposledy na kanálu {channel}",
+        "last_on_button": "naposledy na tlačítku {button}",
+        "overview_title": "Zařízení BILRESA",
+        "summary_connected": "{count} připojeno",
+        "summary_unavailable": "{count} nedostupné",
+        "summary_unknown": "{count} se nehlásí",
+        "matter_connected": "Matter připojen",
+        "matter_offline": "Matter odpojen",
+        "banner_matter_offline": (
+            "Matter je odpojený. Zařízení níže ukazují svůj poslední známý stav."
+        ),
+        "banner_updates_stopped": (
+            "Živé aktualizace se zastavily. Tento pohled může být zastaralý."
+        ),
+        "banner_target_missing": (
+            "Propojení na {count} zařízeních míří na entity, které v Home "
+            "Assistantu už neexistují. Otevřete označený ovládací prvek a "
+            "vyberte jiný cíl."
+        ),
+        "banner_target_missing_named": (
+            "{wheel}: propojení na kanálu {channel} míří na entitu, která "
+            "v Home Assistantu už neexistuje. Otevřete kanál a vyberte jiný cíl."
+        ),
+        "banner_target_missing_button_named": (
+            "{wheel}: propojení na tlačítku {button} míří na entitu, která "
+            "v Home Assistantu už neexistuje. Otevřete tlačítko a vyberte "
+            "jiný cíl."
+        ),
+        "empty_title": "Nenalezeno žádné zařízení BILRESA",
+        "empty_connected": "Integrace je připojená, ale zatím nenašla žádné zařízení.",
+        "empty_offline": (
+            "Home Assistant není připojený k Matteru, takže nevidí žádné zařízení."
+        ),
+        "error_title": "Integrace není dostupná",
+        "retry": "Zkusit znovu",
+        "back": "Zpět na všechna zařízení BILRESA",
+        "detail_views": "Pohledy detailu zařízení",
+        "field_step_curve": "Rozložení kroků",
+        "field_step_curve_help": (
+            "Pokud vám rychlé otáčení skáče, hlavně u spodního konce rozsahu, "
+            "přepněte na percepční a zkuste to znovu. Ponechte lineární, pokud "
+            "si lampa stmívání vyrovnává sama — korigovat dvakrát je horší než "
+            "nekorigovat vůbec."
+        ),
+        "step_curve_linear": "Lineární (výchozí)",
+        "step_curve_perceptual": "Percepční (rovnoměrné pro oko)",
+        "channel_off_note": "nic nedělá, dokud ho tady znovu nezapnete.",
+        "settings_dial_intro": (
+            "Číselná entita každého kanálu (1 až 100): otáčení ji mění a mohou "
+            "ji číst automatizace. Na propojení nemá vliv."
+        ),
+        "settings_dial_title": "Číselník",
+        "settings_step_help": "V jednotkách číselníku, 1 až 100.",
+        "settings_channel_enabled": "Kanál {channel} aktivní",
+        "settings_step": "Změna číselníku na jedno cvaknutí",
+        "settings_acceleration": "Zrychlení číselníku",
+        "settings_acceleration_help": (
+            "Čím rychleji otáčíte, tím větší skok číselníku na jedno "
+            "cvaknutí. 0 % znamená vypnuto."
+        ),
+        "settings_save": "Uložit číselník",
+        "settings_saved": "Číselník uložen",
+        "settings_disabled_badge": "Vypnuto",
+        "settings_error_conflict": (
+            "Nastavení mezitím změnil někdo jiný. Otevřete kolečko znovu a "
+            "zkuste to ještě jednou."
+        ),
+        "settings_error_generic": "Nastavení se nepodařilo uložit.",
+        "tab_channels": "Kanály",
+        "tab_buttons": "Tlačítka",
+        "tab_live": "Živý test",
+        "tab_diagnostics": "Diagnostika",
+        "detail_area_none": "Bez oblasti",
+        "detail_last_activity": "Poslední aktivita",
+        "detail_last_channel": "Naposledy aktivní kanál",
+        "detail_no_last_channel": "Zatím nebyl pozorován žádný kanál",
+        "detail_last_button": "Naposledy aktivní tlačítko",
+        "detail_no_last_button": "Zatím nebylo pozorováno žádné tlačítko",
+        "detail_channels_heading": "Chování fyzických poloh",
+        "channel_title": "Kanál {channel}",
+        "channel_binding": "Propojení",
+        "button_title": "Tlačítko {button}",
+        "target_none": "Není nastaven žádný cíl",
+        "target_same_as_rotation": "Stejný jako cíl otáčení",
+        "binding_editor_title": "Upravit propojení kanálu {channel}",
+        "binding_editor_button_title": "Upravit propojení tlačítka {button}",
+        "field_mode": "Režim",
+        "field_target": "Cíl",
+        "field_target_help": (
+            "Vyberte více světel a ovládejte je společně. Všechna dostanou "
+            "stejnou hodnotu, kterou nastavuje kolečko."
+        ),
+        "field_step": "Změna cíle na jedno cvaknutí",
+        "field_step_help": "O kolik jedno cvaknutí posune cíl.",
+        "field_acceleration": "Zrychlení otáčení",
+        "field_acceleration_help": (
+            "Čím rychleji otáčíte, tím větší změna cíle na jedno cvaknutí. "
+            "0 % znamená vypnuto."
+        ),
+        "field_transition_help": (
+            "Rychlé otáčení přichází po dávkách cvaknutí. Větší dávka se "
+            "rozloží nejvýše na tuto dobu; 0 s vyhlazení vypne."
+        ),
+        "target_empty_is_rotation": (
+            "Když pole necháte prázdné, použije se cíl otáčení."
+        ),
+        "scene_add": "Přidat scénu",
+        "scene_add_placeholder": "Přidat scénu…",
+        "scene_move_up": "Posunout scénu {scene} výš",
+        "scene_move_down": "Posunout scénu {scene} níž",
+        "scene_remove": "Odebrat scénu {scene}",
+        "ledger_then_release": "{hold}; po uvolnění: {release}",
+        "field_transition": "Vyhlazení velkých skoků",
+        "field_follower_light": "Follower light (optional)",
+        "field_follower_help": "Only follows brightness while already on.",
+        "field_follower_offset": "Follower offset (percentage points)",
+        "field_follower_min": "Follower minimum brightness",
+        "field_min_brightness": "Minimální jas",
+        "field_max_brightness": "Maximální jas",
+        "field_press_response": "Odezva",
+        "rotation_more": "Další nastavení otáčení",
+        "gesture_needs_waiting": "Vyžaduje odezvu krátkého stisku „{response}“.",
+        "gesture_action": "Akce",
+        "gesture_target": "Cíl",
+        "field_ramp_direction": "Směr plynulé změny",
+        "field_scenes": "Scény",
+        "field_scenes_help": (
+            "Každý krátký stisk aktivuje další scénu v tomto pořadí."
+        ),
+        "section_rotation": "Otáčení",
+        "click_toggle": "Přepnout cíl",
+        "click_on": "Zapnout cíl",
+        "click_off": "Vypnout cíl",
+        "click_none": "Bez akce",
+        "click_scenes": "Procházet scény",
+        "click_scene_on": "Spustit scénu",
+        "click_script_on": "Spustit skript",
+        "click_script_off": "Zastavit skript",
+        "click_script_toggle": "Přepnout skript",
+        "click_play_pause": "Přehrát / pozastavit",
+        "click_play": "Přehrát",
+        "click_pause": "Pozastavit",
+        "click_stop": "Zastavit",
+        "click_next": "Další skladba",
+        "click_previous": "Předchozí skladba",
+        "click_volume_up": "Hlasitěji",
+        "click_volume_down": "Tišeji",
+        "click_mute_toggle": "Ztlumit / zrušit ztlumení",
+        "click_open": "Otevřít",
+        "click_close": "Zavřít",
+        "click_lock": "Zamknout",
+        "click_start": "Spustit",
+        "click_return_home": "Vrátit do stanice",
+        "click_locate": "Najít",
+        "click_press": "Stisknout tlačítko",
+        "click_trigger": "Spustit automatizaci",
+        "click_speed_up": "Zrychlit",
+        "click_speed_down": "Zpomalit",
+        "click_next_option": "Další možnost",
+        "click_previous_option": "Předchozí možnost",
+        "click_first_option": "První možnost",
+        "click_last_option": "Poslední možnost",
+        "click_step_up": "Zvýšit",
+        "click_step_down": "Snížit",
+        "cover_open_warning": (
+            "Garážová vrata nebo brána se po stisku otevřou, i když se nikdo nedívá."
+        ),
+        "script_run_help": (
+            "Spustí skript a předá mu, které gesto ho spustilo, v proměnných "
+            "gesture, presses, channel, endpoint a device."
+        ),
+        "script_toggle_help": (
+            "Spustí skript, nebo ho zastaví, pokud běží. Přepnutí skriptu "
+            "nemůže předat žádné proměnné."
+        ),
+        "gesture_hold_effect": "Účinek na cíl",
+        "hold_toggle": "Provést akci na cíli podržení",
+        "hold_ramp": "Plynule měnit cíl otáčení",
+        "hold_none": "Bez akce",
+        "ramp_direction_alternate": "Střídat zesílení a zeslabení",
+        "ramp_direction_up": "Vždy zesílit",
+        "ramp_direction_down": "Vždy zeslabit",
+        "button_response_instant": "Spustit už při prvním stisku",
+        "button_response_fast": "Spustit po prvním krátkém uvolnění",
+        "button_response_multi_press": "Počkat, jestli nepřijde další stisk",
+        "dual_button_response_instant": "Spustit už při prvním stisku",
+        "dual_button_response_fast": "Spustit po prvním krátkém uvolnění",
+        "dual_button_response_multi_press": "Počkat, jestli nepřijde další stisk",
+        "save_binding": "Uložit propojení",
+        "delete_binding": "Smazat propojení",
+        "keep_binding": "Ponechat propojení",
+        "delete_binding_confirm": (
+            "Smazat propojení tohoto kanálu? Kolečko přestane ovládat jeho cíle."
+        ),
+        "delete_button_binding_confirm": (
+            "Smazat propojení tohoto tlačítka? Tlačítko přestane ovládat své cíle."
+        ),
+        "binding_saved": "Propojení bylo uloženo a aktivováno.",
+        "binding_validation_failed": "Opravte označená pole a uložte znovu.",
+        "binding_conflict": (
+            "Propojení bylo mezitím změněno jinde. Zobrazují se nejnovější uložené "
+            "hodnoty; před uložením je zkontrolujte."
+        ),
+        "binding_save_failed": "Propojení se nepodařilo uložit: {error}",
+        "binding_delete_failed": "Propojení se nepodařilo smazat: {error}",
+        "binding_test_failed": "Test se nepodařilo spustit: {error}",
+        "binding_error_unloaded": "Integrace není načtená.",
+        "binding_error_wheel_missing": "Kolečko už není dostupné.",
+        "binding_error_binding_missing": "Propojení už neexistuje.",
+        "binding_error_channel_occupied": ("Tento kanál kolečka už má jiné propojení."),
+        "binding_error_button_occupied": "Toto tlačítko už má jiné propojení.",
+        "binding_error_control_mismatch": (
+            "Tento ovládací prvek nepatří k vybranému zařízení BILRESA."
+        ),
+        "binding_error_control_missing": "Tento ovládací prvek už není dostupný.",
+        "binding_error_binding_address_mismatch": (
+            "Toto propojení patří jinému ovládacímu prvku. Obnovte panel a zkuste "
+            "to znovu."
+        ),
+        "binding_error_gesture_unsupported": (
+            "Toto zařízení BILRESA dané gesto nepodporuje."
+        ),
+        "binding_error_binding_not_configured": (
+            "Před testem nejdřív nastavte tento ovládací prvek."
+        ),
+        "validation_invalid_value": "Vyberte nebo zadejte platnou hodnotu.",
+        "validation_target_required": "Vyberte cíl.",
+        "validation_ramp_requires_light": (
+            "Pro plynulou změnu musí být cílem podržení světlo."
+        ),
+        "validation_scene_cannot_turn_off": (
+            "Scénu lze jen spustit, ne vypnout. Zvolte Přepnout cíl nebo Zapnout cíl."
+        ),
+        "validation_scenes_required": "Přidejte alespoň jednu scénu.",
+        "validation_action_not_supported": (
+            "Tento cíl to neumí. Zvolte některou z nabízených akcí."
+        ),
+        "validation_actions_required": (
+            "Přidejte alespoň jednu akci ke spuštění, nebo zvolte jinou akci."
+        ),
+        "validation_actions_incomplete": "Vyberte akci u každého řádku.",
+        "validation_actions_invalid": (
+            "To, co jste u akcí napsali, není platné. Opravte to, nebo "
+            "stránku znovu načtěte."
+        ),
+        "validation_scenes_replace_short_press": (
+            "Procházení scén nahrazuje krátký stisk, takže nemůže spouštět akce."
+        ),
+        "validation_mode_target_mismatch": (
+            "Vybraný režim otáčení nemůže ovládat tuto entitu."
+        ),
+        "validation_multiple_targets_require_light_mode": (
+            "Více cílů lze použít jen pro světla v režimu stmívání, teploty "
+            "bílé nebo barvy."
+        ),
+        "validation_maximum_must_exceed_minimum": (
+            "Maximální jas musí být vyšší než minimální jas."
+        ),
+        "validation_fast_response_conflicts_with_multi_press": (
+            "Rychlé uvolnění nelze kombinovat s dvojitým nebo trojitým stiskem."
+        ),
+        "validation_instant_response_conflicts_with_multi_press": (
+            "Okamžitou odezvu nelze kombinovat s dvojitým nebo trojitým stiskem."
+        ),
+        "validation_instant_response_conflicts_with_hold": (
+            "Okamžitá odezva vyžaduje nastavit podržení na Bez akce."
+        ),
+        "binding_gesture_rotation": "Otočení doleva / doprava",
+        "binding_gesture_short_press": "Krátký stisk",
+        "binding_gesture_double_press": "Dvojitý stisk",
+        "binding_gesture_triple_press": "Trojitý stisk",
+        "binding_gesture_hold": "Podržení",
+        "binding_gesture_release": "Uvolnění",
+        "action_toggle": "Přepnout",
+        "action_turn_on": "Zapnout",
+        "action_turn_off": "Vypnout",
+        "action_run": "Spustit",
+        "action_stop": "Zastavit",
+        "action_none": "Bez akce",
+        "action_run_actions": "Spustit akce",
+        "click_run": "Spustit akce",
+        "hold_run": "Spustit akce",
+        "actions_label": "Akce ke spuštění",
+        "actions_help": (
+            "Zapisují se jako v automatizaci. Gesto se jim předá v proměnných "
+            "gesture, presses, channel, endpoint a device."
+        ),
+        "actions_loading": "Načítá se editor akcí Home Assistantu...",
+        "actions_fallback": (
+            "Editor akcí Home Assistantu tu není dostupný, proto se akce "
+            "upravují v jednoduchém seznamu. Jsou to stejná data: nic se "
+            "neztratí."
+        ),
+        "actions_empty": "Zatím žádné akce.",
+        "actions_add": "Přidat akci",
+        "actions_remove": "Odebrat",
+        "actions_service": "Akce",
+        "actions_target_ids": "Entity oddělené čárkami",
+        "actions_data": "Data (JSON)",
+        "actions_json": "Všechny akce jako JSON",
+        "actions_json_invalid": "Neplatný JSON nebo nesprávný tvar.",
+        "actions_choose": "Vyberte akci",
+        "actions_complex": "Složitější akce; upravte ji v JSONu níže:",
+        "action_cycle_scenes": "Procházet scény",
+        "action_ramp": "Plynule měnit cíl",
+        "action_ramp_alternate": "Plynule zesílit nebo zeslabit",
+        "action_ramp_up": "Zesílit",
+        "action_ramp_down": "Zeslabit",
+        "action_stop_ramp": "Zastavit změnu",
+        "action_play_pause": "Přehrát / pozastavit",
+        "action_play": "Přehrát",
+        "action_pause": "Pozastavit",
+        "action_next": "Další skladba",
+        "action_previous": "Předchozí skladba",
+        "action_volume_up": "Hlasitěji",
+        "action_volume_down": "Tišeji",
+        "action_mute_toggle": "Ztlumit / zrušit ztlumení",
+        "action_open": "Otevřít",
+        "action_close": "Zavřít",
+        "action_lock": "Zamknout",
+        "action_start": "Spustit",
+        "action_return_home": "Vrátit do stanice",
+        "action_locate": "Najít",
+        "action_press": "Stisknout tlačítko",
+        "action_trigger": "Spustit automatizaci",
+        "action_speed_up": "Zrychlit",
+        "action_speed_down": "Zpomalit",
+        "action_next_option": "Další možnost",
+        "action_previous_option": "Předchozí možnost",
+        "action_first_option": "První možnost",
+        "action_last_option": "Poslední možnost",
+        "action_step_up": "Zvýšit",
+        "action_step_down": "Snížit",
+        "wheel_missing_title": "Zařízení BILRESA už není dostupné",
+        "wheel_missing_body": (
+            "Zařízení bylo odebráno nebo se integrace znovu načetla. Vraťte se na "
+            "přehled."
+        ),
+        "live_intro": (
+            "Otočte kolečkem nebo ho stiskněte. Hned uvidíte rozpoznané gesto "
+            "a u nastaveného kanálu také akci odeslanou do cíle."
+        ),
+        "live_button_intro": (
+            "Stiskněte jedno z tlačítek. Hned uvidíte rozpoznané gesto a u "
+            "nastaveného tlačítka také akci odeslanou do cíle."
+        ),
+        "live_result_label": "Výsledek akce",
+        "live_event_label": "Poslední gesto",
+        "live_listening": "Naslouchám",
+        "live_stopped": "Naslouchání zastaveno",
+        "live_waiting_title": "Čekám na kolečko",
+        "live_waiting_body": (
+            "Otočte kolečkem nebo ho stiskněte. Aktivita se zobrazuje jen v tomto "
+            "pohledu."
+        ),
+        "live_button_waiting_title": "Čekám na stisk tlačítka",
+        "live_button_waiting_body": (
+            "Stiskněte, dvakrát stiskněte nebo podržte libovolné tlačítko. Aktivita "
+            "se zobrazuje jen v tomto pohledu."
+        ),
+        "live_error": (
+            "Živá aktivita se zastavila. Odejděte z Živého testu a znovu ho otevřete."
+        ),
+        "result_unavailable": "Gesto rozpoznáno",
+        "result_unavailable_detail": (
+            "Pro tuto událost nejsou dostupné podrobnosti výsledku."
+        ),
+        "result_pending_detail": "Čekám na dokončení nastavené akce.",
+        "result_not_configured_channel_detail": ("Gesto dorazilo do Home Assistantu."),
+        "result_not_configured_button_detail": ("Gesto dorazilo do Home Assistantu."),
+        "result_gesture_rotate": "Otočení rozpoznáno",
+        "result_gesture_press": "Stisk rozpoznán",
+        "result_gesture_double_press": "Dvojitý stisk rozpoznán",
+        "result_gesture_triple_press": "Trojitý stisk rozpoznán",
+        "result_gesture_hold": "Podržení rozpoznáno",
+        "result_gesture_release": "Uvolnění rozpoznáno",
+        "result_gesture_received": "Gesto rozpoznáno",
+        "dispatch_success": "Akce byla odeslána",
+        "dispatch_accepted": "Home Assistant akci přijal",
+        "dispatch_pending": "Odesílám akci do Home Assistantu",
+        "dispatch_skipped": "Propojení akci přeskočilo",
+        "dispatch_not_configured": "Tento kanál zatím nic neovládá",
+        "dispatch_not_configured_button": ("Toto tlačítko zatím nic neovládá"),
+        "dispatch_completed": "Akce propojení byla dokončena",
+        "dispatch_received": "Gesto přijato; čekám na výsledek",
+        "dispatch_failed": "Akce nebyla odeslána",
+        "dispatch_unknown": "Stav akce není dostupný",
+        "result_kind_brightness": "Jas",
+        "result_kind_color_temperature": "Teplota barvy",
+        "result_kind_color": "Barva",
+        "result_kind_volume": "Hlasitost",
+        "result_kind_position": "Poloha",
+        "result_kind_temperature": "Teplota",
+        "result_kind_fan_speed": "Rychlost ventilátoru",
+        "result_kind_value": "Hodnota",
+        "result_scene": "Scéna {position}/{total} · {target}",
+        "result_entity_action": "{action} · {target}",
+        "result_ramp_stopped": "Plynulá změna byla zastavena",
+        "result_fast_press_complete": ("Jednoduchý stisk byl odeslán okamžitě"),
+        "service_toggle": "Přepnout",
+        "service_turn_on": "Zapnout",
+        "service_turn_off": "Vypnout",
+        "service_run": "Spustit",
+        "service_stop": "Zastavit",
+        "source_panel_test": "Spuštěno testovacími ovladači v panelu",
+        "test_controls_heading": "Otestovat nastavené akce",
+        "test_controls_intro": (
+            "Tyto ovladače spustí skutečné propojení bez fyzického kolečka. "
+            "Cílové entity se mohou okamžitě změnit."
+        ),
+        "test_controls_button_intro": (
+            "Tyto ovladače spustí skutečné propojení bez stisku fyzického tlačítka. "
+            "Cílové entity se mohou okamžitě změnit."
+        ),
+        "test_channel": "Test kanálu {channel}",
+        "test_button": "Test tlačítka {button}",
+        "test_rotate_down": "Otočit dolů",
+        "test_rotate_up": "Otočit nahoru",
+        "test_single": "Jednoduchý stisk",
+        "test_double": "Dvojitý stisk",
+        "test_triple": "Trojitý stisk",
+        "test_hold": "Začít podržení",
+        "test_release": "Uvolnit podržení",
+        "test_no_bindings": "Pro testování nejdřív nastavte některý kanál.",
+        "test_no_button_bindings": ("Pro testování nejdřív nastavte některé tlačítko."),
+        "direction_up": "nahoru",
+        "direction_down": "dolů",
+        "gesture_rotate": ("Kanál {channel} · otočení {direction} · {delta} cvaknutí"),
+        "gesture_press_single": "Kanál {channel} · jednoduchý stisk",
+        "gesture_press_double": "Kanál {channel} · dvojitý stisk",
+        "gesture_press_triple": "Kanál {channel} · trojitý stisk",
+        "gesture_hold": "Kanál {channel} · podržení",
+        "gesture_release": "Kanál {channel} · uvolnění",
+        "gesture_unknown": "Kanál {channel} · přijata aktivita",
+        "live_channels_heading": "Kanály",
+        "gesture_button_press_single": "Tlačítko {button} · jednoduchý stisk",
+        "gesture_button_press_double": "Tlačítko {button} · dvojitý stisk",
+        "gesture_button_hold": "Tlačítko {button} · podržení",
+        "gesture_button_release": "Tlačítko {button} · uvolnění",
+        "gesture_button_unknown": "Tlačítko {button} · přijata aktivita",
+        "gesture_observed_duration": "zachyceno {duration} s",
+        "live_buttons_heading": "Tlačítka",
+        "live_recent": "Poslední události",
+        "live_setup_channel": "Nastavit kanál {channel}",
+        "live_setup_button": "Nastavit tlačítko {button}",
+        "diagnostics_heading": "Stav zařízení",
+        "diagnostics_intro": (
+            "Stav z Home Assistantu pouze pro čtení. Soukromé identifikátory Matter "
+            "se nezobrazují."
+        ),
+        "diagnostic_availability": "Dostupnost zařízení",
+        "diagnostic_matter": "Připojení Matter",
+        "diagnostic_source": "Zdroj událostí",
+        "diagnostic_link": "Propojení se zařízením Matter",
+        "diagnostic_linked": "Propojeno",
+        "diagnostic_not_linked": "Nepropojeno",
+        "diagnostic_health_ok": "Kolečko je připravené",
+        "diagnostic_health_attention": "Kolečko vyžaduje pozornost",
+        "diagnostic_health_ok_body": (
+            "Matter i živé doručování událostí jsou připojené."
+        ),
+        "diagnostic_connection_heading": "Připojení",
+        "diagnostic_activity_heading": "Aktivita",
+        "diagnostic_technical_details": "Technické podrobnosti",
+        "diagnostic_contract": "Kontrakt panelu",
+        "source_core": "Matter klient Home Assistantu",
+        "source_fallback": "Pasivní záložní WebSocket",
+        "source_unloaded": "Integrace není načtená",
+        "recovery_heading": "Doporučený krok",
+        "recovery_ok": "Není potřeba žádný opravný krok.",
+        "recovery_matter": (
+            "Zkontrolujte integraci Matter a připojení k Matter Serveru."
+        ),
+        "recovery_unavailable": (
+            "Zkontrolujte baterii kolečka a přibližte ho k síti Matter."
+        ),
+        "recovery_unknown": (
+            "Zkontrolujte, že je kolečko v Home Assistantu, a potom integraci znovu "
+            "načtěte."
+        ),
+        "menu": "Otevřít postranní panel Home Assistant",
+    },
+}
+
+
+def resolve_language(language: str | None) -> str:
+    """Pick the closest language we speak.
+
+    `hass.config.language` can be a regional tag such as `en-GB`; match on the
+    base tag before giving up, so a British install does not silently fall back
+    when English exists.
+    """
+    if not language:
+        return DEFAULT_LANGUAGE
+    if language in STRINGS:
+        return language
+    base = language.split("-", 1)[0].lower()
+    return base if base in STRINGS else DEFAULT_LANGUAGE
+
+
+def panel_strings(language: str | None) -> dict[str, str]:
+    """Every string the frontend renders, in the instance's language."""
+    return dict(STRINGS[resolve_language(language)])
+
+
+def localize(language: str | None, key: str, **placeholders: Any) -> str:
+    """One string, with its placeholders filled.
+
+    Falls back to English for a key missing from another language rather than
+    rendering the raw key at a user. The alignment test should make that
+    unreachable, but a user seeing `mode_brightness` is worse than a user seeing
+    English.
+    """
+    resolved = resolve_language(language)
+    template = STRINGS[resolved].get(key) or STRINGS[DEFAULT_LANGUAGE].get(key, key)
+    try:
+        return template.format(**placeholders)
+    except (KeyError, IndexError):
+        return template

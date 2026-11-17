@@ -1,0 +1,605 @@
+"""Tests for event-source fallback and privacy-safe telemetry."""
+
+from __future__ import annotations
+
+from types import SimpleNamespace
+from typing import Any
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+
+from custom_components.ikea_bilresa.channel_controls import (
+    DEFAULT_SETTINGS,
+    WheelSettings,
+)
+from custom_components.ikea_bilresa.const import (
+    ACTION_PRESS,
+    ACTION_ROTATE,
+    ACTION_SHORT_RELEASE,
+    BUTTON_RESPONSE_FAST,
+    BUTTON_RESPONSE_INSTANT,
+    CLUSTER_SWITCH,
+    CONF_BUTTON_RESPONSE,
+    CONF_CHANNEL,
+    CONF_CHANNEL_ENABLED,
+    CONF_ENDPOINT,
+    CONF_HOLD_ACTION,
+    CONF_NODE_ID,
+    DIRECTION_UP,
+    EVENT_BILRESA,
+    HOLD_NONE,
+    SUBENTRY_BINDING,
+    signal_raw_button,
+)
+from custom_components.ikea_bilresa.coordinator import BilresaCoordinator
+from custom_components.ikea_bilresa.engine import WheelAction
+from custom_components.ikea_bilresa.matter_core import CoreMatterUnavailable
+from custom_components.ikea_bilresa.model import BilresaWheel
+from tests.test_binding import _binding
+
+
+class FailingCoreSource:
+    source = "core_matter_client"
+    server_info = None
+
+    def __init__(self, *_args) -> None:
+        self.stop = AsyncMock()
+
+    async def start(self) -> None:
+        raise CoreMatterUnavailable("unsupported test client")
+
+
+class FakeWebSocketSource:
+    source = "dedicated_websocket"
+    server_info = {"sdk_version": "test"}
+
+    def __init__(self, *_args) -> None:
+        self.start = AsyncMock()
+        self.stop = AsyncMock()
+
+
+@pytest.mark.asyncio
+async def test_initial_core_failure_falls_back_and_records_reason(monkeypatch) -> None:
+    hass = SimpleNamespace()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        FailingCoreSource,
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.MatterWSClient",
+        FakeWebSocketSource,
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.async_get_clientsession",
+        lambda _hass: Mock(),
+    )
+
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+    await coordinator.async_start()
+
+    assert coordinator.event_source == "dedicated_websocket"
+    assert coordinator.telemetry["fallback_count"] == 1
+    assert coordinator.telemetry["last_fallback_reason"] == "unsupported test client"
+    coordinator._client.start.assert_awaited_once()
+
+
+def test_recent_telemetry_is_bounded_and_excludes_node_id(monkeypatch) -> None:
+    hass = SimpleNamespace()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+
+    for event_number in range(25):
+        coordinator._on_event(
+            "node_event",
+            {
+                "node_id": 123456,
+                "endpoint_id": 1,
+                "cluster_id": 59,
+                "event_id": 5,
+                "event_number": event_number,
+            },
+        )
+
+    recent = coordinator.telemetry["recent_events"]
+    assert len(recent) == 20
+    assert recent[0]["event_number"] == 5
+    assert all("node_id" not in event for event in recent)
+
+
+def test_existing_wheel_metadata_is_refreshed(monkeypatch) -> None:
+    """A firmware update may add serial metadata to an already known node."""
+    hass = SimpleNamespace()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+    original = BilresaWheel(
+        node_id=12,
+        name="BILRESA scroll wheel",
+        product_name="BILRESA scroll wheel",
+        serial=None,
+        endpoints={},
+    )
+    updated = BilresaWheel(
+        node_id=12,
+        name="BILRESA scroll wheel",
+        product_name="BILRESA scroll wheel",
+        serial="new-serial",
+        endpoints={},
+    )
+    wheels = iter([original, updated, updated])
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.parse_node",
+        lambda _node: next(wheels),
+    )
+
+    assert coordinator._register_wheel({}) is True
+    assert coordinator._register_wheel({}) is True
+    assert coordinator.wheels[12].serial == "new-serial"
+    assert coordinator._register_wheel({}) is False
+
+
+def test_schema_12_node_updated_refreshes_metadata(monkeypatch) -> None:
+    hass = SimpleNamespace()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+    coordinator._add_node = Mock()
+
+    payload = {"node_id": 12, "attributes": {}}
+    coordinator._on_event("node_updated", payload)
+
+    coordinator._add_node.assert_called_once_with(payload)
+
+
+def test_current_position_is_forwarded_only_as_engine_safety_hint(
+    monkeypatch,
+) -> None:
+    hass = SimpleNamespace()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+    coordinator.wheels[12] = BilresaWheel(
+        node_id=12,
+        name="Test button",
+        product_name="BILRESA dual button",
+        serial=None,
+        endpoints={1: SimpleNamespace()},
+    )
+    coordinator._engine.observe_position = Mock()
+    coordinator._dispatch = Mock()
+
+    coordinator._on_event("attribute_updated", [12, "1/59/0", 0])
+
+    coordinator._engine.observe_position.assert_called_once_with(12, 1, 0)
+    coordinator._dispatch.assert_not_called()
+
+
+def test_server_shutdown_marks_connection_disconnected(monkeypatch) -> None:
+    hass = SimpleNamespace()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+    coordinator.connected = True
+    coordinator._set_connected = Mock()
+
+    coordinator._on_event("server_shutdown", None)
+
+    coordinator._set_connected.assert_called_once_with(False)
+
+
+def test_raw_gesture_hint_is_dispatched_only_internally(monkeypatch) -> None:
+    hass = SimpleNamespace()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    dispatch = Mock()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.async_dispatcher_send", dispatch
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.decode_event",
+        lambda *_args: {
+            "role": "button",
+            "channel": 2,
+            "endpoint_id": 3,
+            "event_type": "short_release",
+        },
+    )
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+    coordinator._engine.process = Mock(return_value=None)
+    coordinator.wheels[12] = BilresaWheel(
+        node_id=12,
+        name="Test wheel",
+        product_name="BILRESA scroll wheel",
+        serial=None,
+        endpoints={},
+    )
+
+    coordinator._handle_node_event(
+        {"node_id": 12, "cluster_id": CLUSTER_SWITCH, "endpoint_id": 3}
+    )
+
+    dispatch.assert_called_once_with(
+        hass, signal_raw_button(12, 2), "button", "short_release", 3
+    )
+
+
+def _raw_coordinator(monkeypatch, send, *, channel: int | None, event_type: str):
+    """A coordinator whose next node event decodes to one raw button phase."""
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.async_dispatcher_send", send
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.decode_event",
+        lambda *_args: {
+            "role": "button",
+            "channel": channel,
+            "endpoint_id": 3,
+            "event_type": event_type,
+        },
+    )
+    coordinator = BilresaCoordinator(SimpleNamespace(), "ws://matter/ws")
+    coordinator._engine.process = Mock(return_value=None)
+    coordinator.wheels[12] = BilresaWheel(
+        node_id=12,
+        name="Test wheel",
+        product_name="BILRESA scroll wheel",
+        serial=None,
+        endpoints={},
+    )
+    return coordinator
+
+
+@pytest.mark.parametrize(
+    ("response", "raw_event"),
+    [
+        (BUTTON_RESPONSE_FAST, "short_release"),
+        (BUTTON_RESPONSE_INSTANT, "initial_press"),
+    ],
+)
+@pytest.mark.parametrize("enabled", [True, False])
+def test_raw_button_runs_early_bindings_only_on_enabled_channels(
+    monkeypatch, response: str, raw_event: str, enabled: bool
+) -> None:
+    """Fast/Instant act on the raw signal, so a disabled channel must not send it."""
+    binding, _interval, _watchdog = _binding(
+        monkeypatch,
+        **{
+            CONF_NODE_ID: 12,
+            CONF_CHANNEL: 2,
+            CONF_BUTTON_RESPONSE: response,
+            CONF_HOLD_ACTION: HOLD_NONE,
+        },
+    )
+    binding._single_press = Mock()
+    routes = {signal_raw_button(12, 2): binding._handle_raw_input}
+
+    def _send(_hass, signal, *args) -> None:
+        if (target := routes.get(signal)) is not None:
+            target(*args)
+
+    coordinator = _raw_coordinator(monkeypatch, _send, channel=2, event_type=raw_event)
+    coordinator.wheel_settings = {
+        12: WheelSettings.from_data(
+            {CONF_NODE_ID: 12, CONF_CHANNEL_ENABLED: {"2": enabled}}
+        )
+    }
+
+    coordinator._handle_node_event(
+        {"node_id": 12, "cluster_id": CLUSTER_SWITCH, "endpoint_id": 3}
+    )
+
+    assert binding._single_press.call_count == (1 if enabled else 0)
+    coordinator._engine.process.assert_called_once()
+
+
+def test_raw_button_on_dual_button_ignores_disabled_wheel_channels(
+    monkeypatch,
+) -> None:
+    """A dual button has no channel to disable; its raw signal always flows."""
+    dispatch = Mock()
+    coordinator = _raw_coordinator(
+        monkeypatch, dispatch, channel=None, event_type="short_release"
+    )
+    coordinator.wheel_settings = {
+        12: WheelSettings.from_data(
+            {CONF_NODE_ID: 12, CONF_CHANNEL_ENABLED: {"1": False, "2": False}}
+        )
+    }
+
+    coordinator._handle_node_event(
+        {"node_id": 12, "cluster_id": CLUSTER_SWITCH, "endpoint_id": 3}
+    )
+
+    dispatch.assert_called_once_with(
+        coordinator.hass, signal_raw_button(12, None), "button", "short_release", 3
+    )
+
+
+def test_button_binding_keys_separate_endpoints_and_multiple_devices(
+    monkeypatch,
+) -> None:
+    hass = SimpleNamespace()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    created = []
+
+    class FakeBinding:
+        def __init__(self, _hass, data, trace=None, device_name=None) -> None:
+            self.device_name = device_name
+            self.node_id = int(data[CONF_NODE_ID])
+            self.channel = int(data[CONF_CHANNEL]) if CONF_CHANNEL in data else None
+            self.endpoint_id = (
+                int(data[CONF_ENDPOINT]) if CONF_ENDPOINT in data else None
+            )
+            kind = CONF_CHANNEL if self.channel is not None else CONF_ENDPOINT
+            address = self.channel if self.channel is not None else self.endpoint_id
+            self.binding_key = (self.node_id, kind, address)
+            self.test_action = Mock()
+            created.append(self)
+
+        def async_attach(self):
+            return Mock()
+
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.LightBinding", FakeBinding
+    )
+    entry = SimpleNamespace(
+        subentries={
+            "button-a-1": SimpleNamespace(
+                subentry_type=SUBENTRY_BINDING,
+                data={CONF_NODE_ID: "101", CONF_ENDPOINT: "1"},
+            ),
+            "button-a-2": SimpleNamespace(
+                subentry_type=SUBENTRY_BINDING,
+                data={CONF_NODE_ID: "101", CONF_ENDPOINT: "2"},
+            ),
+            "button-b-1": SimpleNamespace(
+                subentry_type=SUBENTRY_BINDING,
+                data={CONF_NODE_ID: "202", CONF_ENDPOINT: "1"},
+            ),
+            "wheel": SimpleNamespace(
+                subentry_type=SUBENTRY_BINDING,
+                data={CONF_NODE_ID: "303", CONF_CHANNEL: "1"},
+            ),
+        }
+    )
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+
+    coordinator.async_setup_bindings(entry)
+
+    assert set(coordinator._bindings) == {
+        (101, CONF_ENDPOINT, 1),
+        (101, CONF_ENDPOINT, 2),
+        (202, CONF_ENDPOINT, 1),
+        (303, CONF_CHANNEL, 1),
+    }
+    action = WheelAction(
+        node_id=202,
+        wheel_name="Second dual button",
+        channel=None,
+        endpoint_id=1,
+        type=ACTION_PRESS,
+        presses=1,
+    )
+    assert coordinator.test_binding_action(action) is True
+    created[2].test_action.assert_called_once_with(action)
+    assert all(
+        binding.test_action.call_count == (1 if binding is created[2] else 0)
+        for binding in created
+    )
+    # Each binding can ask for the name of its own wheel.
+    coordinator.wheels[202] = SimpleNamespace(name="Second dual button")
+    assert created[2].device_name() == "Second dual button"
+    assert created[0].device_name() == ""
+
+
+def test_public_event_includes_registry_device_id_without_breaking_payload(
+    monkeypatch,
+) -> None:
+    bus = SimpleNamespace(async_fire=Mock())
+    hass = SimpleNamespace(bus=bus)
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.async_dispatcher_send", Mock()
+    )
+    coordinator = BilresaCoordinator(hass, "ws://matter/ws")
+    links = SimpleNamespace(device_id=Mock(return_value="device-123"))
+    coordinator._device_links = links
+    action = WheelAction(
+        node_id=12,
+        wheel_name="Test wheel",
+        channel=2,
+        endpoint_id=3,
+        type=ACTION_PRESS,
+        presses=1,
+    )
+
+    coordinator._dispatch(action)
+
+    links.device_id.assert_called_once_with(12)
+    event_type, event_data = bus.async_fire.call_args.args
+    assert event_type == EVENT_BILRESA
+    assert event_data["device_id"] == "device-123"
+    assert event_data["node_id"] == 12
+    assert event_data["presses"] == 1
+
+
+def _dispatch_coordinator(monkeypatch) -> tuple[Any, Mock, Mock]:
+    """A coordinator with the bus and dispatcher captured, ready to dispatch."""
+    bus = SimpleNamespace(async_fire=Mock())
+    hass = SimpleNamespace(bus=bus)
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.CoreMatterEventSource",
+        lambda *_args: SimpleNamespace(source="core", server_info=None),
+    )
+    dispatch = Mock()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.coordinator.async_dispatcher_send", dispatch
+    )
+    return BilresaCoordinator(hass, "ws://matter/ws"), bus.async_fire, dispatch
+
+
+def _rotate(node_id: int, channel: int) -> WheelAction:
+    return WheelAction(
+        node_id=node_id,
+        wheel_name="Test wheel",
+        channel=channel,
+        endpoint_id=3,
+        type=ACTION_ROTATE,
+        direction=DIRECTION_UP,
+        notches=2,
+    )
+
+
+def test_disabled_channel_fires_nothing_at_all(monkeypatch) -> None:
+    """The owner's rule: a disabled channel behaves as if it did not exist.
+
+    Not merely "the dial does not move" — no bus event, no channel signal, so
+    no binding, no automation trigger and no entity movement either.
+    """
+    coordinator, fire, dispatch = _dispatch_coordinator(monkeypatch)
+    coordinator.wheel_settings = {
+        12: WheelSettings.from_data(
+            {CONF_NODE_ID: 12, CONF_CHANNEL_ENABLED: {"2": False}}
+        )
+    }
+
+    coordinator._dispatch(_rotate(12, 2))
+
+    fire.assert_not_called()
+    dispatch.assert_not_called()
+    assert coordinator.telemetry["actions_dispatched"] == 0
+    assert coordinator.telemetry["actions_suppressed"] == 1
+
+
+def test_disabling_one_channel_leaves_its_siblings_alone(monkeypatch) -> None:
+    coordinator, fire, _dispatch = _dispatch_coordinator(monkeypatch)
+    coordinator.wheel_settings = {
+        12: WheelSettings.from_data(
+            {CONF_NODE_ID: 12, CONF_CHANNEL_ENABLED: {"2": False}}
+        )
+    }
+
+    coordinator._dispatch(_rotate(12, 1))
+
+    fire.assert_called_once()
+    assert coordinator.telemetry["actions_dispatched"] == 1
+    assert coordinator.telemetry["actions_suppressed"] == 0
+
+
+def test_settings_for_one_wheel_do_not_silence_another(monkeypatch) -> None:
+    """Settings are keyed by node, so one wheel cannot mute its neighbour."""
+    coordinator, fire, _dispatch = _dispatch_coordinator(monkeypatch)
+    coordinator.wheel_settings = {
+        12: WheelSettings.from_data(
+            {CONF_NODE_ID: 12, CONF_CHANNEL_ENABLED: {"2": False}}
+        )
+    }
+
+    coordinator._dispatch(_rotate(15, 2))
+
+    fire.assert_called_once()
+    assert coordinator.channel_enabled(15, 2)
+
+
+def test_a_wheel_without_settings_has_every_channel_enabled(monkeypatch) -> None:
+    coordinator, fire, _dispatch = _dispatch_coordinator(monkeypatch)
+
+    coordinator._dispatch(_rotate(12, 3))
+
+    fire.assert_called_once()
+    assert coordinator.settings_for(12) is DEFAULT_SETTINGS
+
+
+def _short_release(
+    node_id: int, channel: int | None, endpoint_id: int = 3
+) -> WheelAction:
+    return WheelAction(
+        node_id=node_id,
+        wheel_name="Test wheel",
+        channel=channel,
+        endpoint_id=endpoint_id,
+        type=ACTION_SHORT_RELEASE,
+    )
+
+
+def test_short_release_reaches_only_the_public_bus(monkeypatch) -> None:
+    """Entities, triggers and bindings keep completed-gesture semantics.
+
+    Fast bindings already see ShortRelease on the internal raw signal; the
+    public action must not also reach the channel signal or the panel's
+    binding-activity feed, where every click would log a skipped gesture.
+    """
+    coordinator, fire, dispatch = _dispatch_coordinator(monkeypatch)
+
+    coordinator._dispatch(_short_release(12, 2))
+
+    fire.assert_called_once()
+    event_type, event_data = fire.call_args.args
+    assert event_type == EVENT_BILRESA
+    assert (event_data["type"], event_data["channel"]) == (ACTION_SHORT_RELEASE, 2)
+    dispatch.assert_not_called()
+
+
+def test_disabled_channel_suppresses_short_release(monkeypatch) -> None:
+    coordinator, fire, dispatch = _dispatch_coordinator(monkeypatch)
+    coordinator.wheel_settings = {
+        12: WheelSettings.from_data(
+            {CONF_NODE_ID: 12, CONF_CHANNEL_ENABLED: {"2": False}}
+        )
+    }
+
+    coordinator._dispatch(_short_release(12, 2))
+
+    fire.assert_not_called()
+    dispatch.assert_not_called()
+    assert coordinator.telemetry["actions_suppressed"] == 1
+
+
+def test_dual_button_short_release_is_told_apart_by_endpoint(monkeypatch) -> None:
+    """The E2489 has no channel; its two buttons differ only by endpoint."""
+    coordinator, fire, dispatch = _dispatch_coordinator(monkeypatch)
+
+    coordinator._dispatch(_short_release(12, None, endpoint_id=1))
+    coordinator._dispatch(_short_release(12, None, endpoint_id=2))
+
+    payloads = [call.args[1] for call in fire.call_args_list]
+    assert [(p["channel"], p["endpoint_id"]) for p in payloads] == [
+        (None, 1),
+        (None, 2),
+    ]
+    dispatch.assert_not_called()
+
+
+def test_a_binding_can_ask_for_its_wheels_current_name() -> None:
+    coordinator = BilresaCoordinator(SimpleNamespace(), "ws://matter/ws")
+    name = coordinator._device_name_for("101")
+
+    assert name() == ""  # not discovered yet
+    coordinator.wheels[101] = SimpleNamespace(name="Living room wheel")
+    assert name() == "Living room wheel"
+    coordinator.wheels[101] = SimpleNamespace(name="Renamed")
+    assert name() == "Renamed"
+    assert coordinator._device_name_for(None)() == ""
