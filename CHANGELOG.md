@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-rc.2 (unreleased)
+## 0.1.0-rc.2
 
 - Reject overlapping follower light groups in both setup interfaces and
   recheck group membership before dispatch.

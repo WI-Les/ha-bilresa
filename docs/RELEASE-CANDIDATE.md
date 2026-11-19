@@ -1,8 +1,6 @@
-# Next release candidate
+# Release candidate 0.1.0-rc.2
 
-Draft for a future public pre-release; no release is created by this document.
-
-## Proposed highlights
+## Highlights
 
 - Reject follower configurations whose reported light groups overlap, with a
   clear message in both setup interfaces. Recheck membership before dispatch.
@@ -24,7 +22,18 @@ and panel remain upstream work.
 - Confirm both icon files are included, installation instructions match the
   actual release, and the manifest, tag and release metadata agree.
 - Record tested device classes and disclose remaining hardware and browser gaps.
-  Physical Zigbee2MQTT group testing and an authenticated browser installation
-  have not yet been established by the automated tests.
 - Keep the existing public release available until the new candidate is ready;
   do not replace or move an existing tag.
+
+## Validation
+
+- A physical BILRESA scroll wheel on Home Assistant 2026.11.2 controlled a
+  native three-light Zigbee2MQTT group. All three lights reported the same
+  settled brightness after changes in both directions. The tester confirmed
+  that the lamps dimmed together without visible jumps.
+- On an isolated Home Assistant 2026.11.1 installation, Chrome completed the
+  setup flow after recovering from a Matter connection error. The panel loaded
+  at desktop and phone widths, and Home Assistant served both bundled icons.
+  The Matter device in that browser test was simulated.
+- The hardware pilot covered one group. Other devices and network
+  configurations may behave differently.
