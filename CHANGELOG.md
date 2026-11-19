@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0-rc.2
+
+- Reject overlapping follower light groups in both setup interfaces and
+  recheck group membership before dispatch.
+- Cancel pending follower group work when another binding changes a member.
+- Skip volume commands when a player reports no valid current volume rather
+  than guessing a level; resume once it reports a valid value.
+- Add installation, migration, rollback and compatibility guides.
+
 ## 0.1.0-rc.1
 
 This independent pre-release builds on

@@ -27,14 +27,10 @@ See the [changelog](CHANGELOG.md) for changes relative to the upstream release.
 This is a pre-release. Back up your Home Assistant configuration first and
 keep existing controls available until the replacement has been tested.
 
-1. Copy the complete `custom_components/ikea_bilresa` directory, including
-   `brand`, to your Home Assistant `custom_components` directory.
-2. Restart Home Assistant.
-3. In **Settings → Devices & services**, add **IKEA BILRESA** and connect it
-   to the Matter Server.
-4. Open the BILRESA panel and configure a channel's target, mode and actions.
-5. Test each channel before disabling its previous automation. Ensure only one
-   controller owns a given gesture during migration.
+Add this repository as an **Integration** in Marketplace or HACS under
+**Custom repositories**, or install it manually. Follow the full
+[installation and migration guide](docs/INSTALLATION.md) for setup and rollback.
+See [compatibility](docs/COMPATIBILITY.md) for target capabilities and limits.
 
 For follower lights, do not select a follower contained in the primary group
 and avoid circular mappings. Devices without transition support may change

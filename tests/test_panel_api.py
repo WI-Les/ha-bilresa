@@ -13,6 +13,7 @@ from custom_components.ikea_bilresa.const import (
     CONF_CLICK_ACTION,
     CONF_CLICK_TARGET,
     CONF_ENDPOINT,
+    CONF_FOLLOWER,
     CONF_HOLD_ACTION,
     CONF_MODE,
     CONF_NODE_ID,
@@ -545,6 +546,37 @@ def test_binding_save_creates_only_normalized_subentry(monkeypatch) -> None:
     assert dict(created["item"].data)[CONF_NODE_ID] == str(NODE_A)
     assert dict(created["item"].data)[CONF_CHANNEL] == "1"
     hass.config_entries.async_add_subentry.assert_called_once()
+
+
+def test_binding_save_rejects_follower_inside_primary_group() -> None:
+    hass, _entry = _mutation_hass()
+    states = {
+        "light.office": SimpleNamespace(attributes={"entity_id": ["light.follower"]}),
+        "light.follower": SimpleNamespace(attributes={}),
+    }
+    hass.states = SimpleNamespace(get=states.get)
+    connection = _connection()
+    ws_binding_save(
+        hass,
+        connection,
+        {
+            "id": 22,
+            "type": TYPE_BINDING_SAVE,
+            "wheel": wheel_key(NODE_A),
+            "channel": 1,
+            "data": {
+                CONF_TARGET: "light.office",
+                CONF_MODE: "brightness",
+                CONF_FOLLOWER: "light.follower",
+            },
+        },
+    )
+    assert connection.send_result.call_args.args[1] == {
+        "ok": False,
+        "error": "validation",
+        "fields": {CONF_FOLLOWER: "follower_overlap"},
+    }
+    hass.config_entries.async_add_subentry.assert_not_called()
 
 
 def test_button_save_maps_display_number_to_endpoint_without_leaking_it(
