@@ -5,6 +5,9 @@ speakers and other Home Assistant entities. This guide uses the English
 interface of BILRESA **0.1.0-rc.2**. Screenshots show a test installation with
 example devices and controls.
 
+If you are setting up your first remote, start with the
+[illustrated quick start](QUICK-START.md).
+
 - [Install and connect](#install-and-connect)
 - [Find your remote](#find-your-remote)
 - [Configure a scroll wheel](#configure-a-scroll-wheel)
@@ -119,6 +122,16 @@ connects to Home Assistant through Matter.
 4. Save, turn one notch down, then turn one up and check the volume in Home
    Assistant. If the player stops reporting its volume, rotary control
    waits for a usable reading before setting a new level.
+
+![Rotation editor set to Volume for the example speaker, with a 3% change per notch](images/user-guide/10-set-volume.png)
+
+### Example colour
+
+On a spare channel, choose **Colour** to turn through hues on a compatible
+lamp. Choose **Colour temperature** if you want the wheel to shift between
+warmer and cooler whites. In **Target**, select a lamp that offers the
+corresponding control in Home Assistant. Save, turn the lamp on and rotate a
+few notches each way. You can keep brightness on a separate channel.
 
 ### Choose a short-press response
 

@@ -11,8 +11,9 @@ Maintained by **Les.**, based on the work of [Vituhlos and contributors](https:/
 
 See the [changelog](CHANGELOG.md) for changes relative to the upstream release.
 
-The [illustrated user manual](docs/USER-GUIDE.md) walks through setup, channel
-bindings, follower lights, volume control and troubleshooting.
+**New to BILRESA?** Follow the [illustrated quick start](docs/QUICK-START.md)
+to set up your first lamp. The [full user manual](docs/USER-GUIDE.md) covers
+volume, colour, follower lights, scenes and troubleshooting.
 
 ## Features
 
@@ -31,17 +32,16 @@ bindings, follower lights, volume control and troubleshooting.
 
 ## Installation
 
-This is a pre-release. Back up your Home Assistant configuration first and
-keep existing controls available until the replacement has been tested.
+1. Add your remote to Home Assistant through Matter.
+2. Download BILRESA from the **Custom repositories** menu in Marketplace or HACS.
+3. Restart Home Assistant, add **IKEA BILRESA** under **Settings → Devices & services**
+   and open **IKEA BILRESA** in the sidebar.
 
-Add this repository as an **Integration** in Marketplace or HACS under
-**Custom repositories**, or install it manually. Follow the full
-[installation and migration guide](docs/INSTALLATION.md) for setup and rollback.
-See [compatibility](docs/COMPATIBILITY.md) for target capabilities and limits.
+![Rotation editor with Smooth dimming, a reading lamp and a 3% step selected](docs/images/user-guide/08-dimming-setup.png)
 
-For follower lights, do not select a follower contained in the primary group
-and avoid circular mappings. Devices without transition support may change
-brightness in visible steps.
+See the [quick start](docs/QUICK-START.md) for each step, the
+[installation guide](docs/INSTALLATION.md) for manual installation and migration,
+and [compatibility](docs/COMPATIBILITY.md) for target requirements.
 
 ## Testing and compatibility
 
