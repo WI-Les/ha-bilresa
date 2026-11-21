@@ -9,6 +9,12 @@ Zigbee2MQTT group in both directions on Home Assistant 2026.11.2. A separate
 Chrome test confirmed manual installation, setup recovery and panel loading
 on Home Assistant 2026.11.1 with a simulated Matter device.
 
+On the pilot installation, a physical press and release started and stopped
+a configured colour automation. The automation trace recorded seven light
+commands without errors. A separate BILRESA panel test verified that a media
+player reported a three-percentage-point decrease and returned to its initial
+volume after the opposite simulated rotation.
+
 Device and network behaviour can differ. The pilot covers one Zigbee2MQTT
 group and does not establish compatibility across all devices and networks.
 See the [hardware validation plan](docs/HARDWARE-VALIDATION.md).
