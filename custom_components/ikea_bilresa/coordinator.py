@@ -87,6 +87,7 @@ class BilresaCoordinator:
         self._binding_keys: set[BindingKey] = set()
         self._bindings: dict[BindingKey, LightBinding] = {}
         self._disconnect_timer: Callable[[], None] | None = None
+        self._seen_event_numbers: deque[tuple] = deque(maxlen=2048)
         self._event_counts: Counter[str] = Counter()
         self._ignored_counts: Counter[str] = Counter()
         self._recent_events: deque[dict[str, Any]] = deque(maxlen=20)
@@ -356,6 +357,13 @@ class BilresaCoordinator:
         if decoded is None:
             self._ignored_counts["undecodable_switch_event"] += 1
             return
+        number = data.get("event_number")
+        if isinstance(number, int) and not isinstance(number, bool):
+            identity = (node_id, data.get("endpoint_id"), number, data.get("timestamp"))
+            if identity in self._seen_event_numbers:
+                self._ignored_counts["duplicate_event"] += 1
+                return
+            self._seen_event_numbers.append(identity)
         # Internal gesture metadata lets bindings distinguish trailing updates
         # from a deliberate new rotation and lets fast button bindings react to
         # ShortRelease. It never reaches the public HA event bus. A disabled
@@ -442,6 +450,8 @@ class BilresaCoordinator:
 
     @callback
     def _add_node(self, node) -> None:
+        if isinstance(node, dict) and node.get("available") is False:
+            self._stop_node_actions(node.get("node_id"))
         if self._register_wheel(node):
             async_dispatcher_send(self.hass, SIGNAL_WHEELS_UPDATED)
 
@@ -470,11 +480,19 @@ class BilresaCoordinator:
     def _remove_node(self, data) -> None:
         node_id = data if isinstance(data, int) else (data or {}).get("node_id")
         if node_id in self.wheels:
+            self._stop_node_actions(node_id)
             wheel = self.wheels.pop(node_id)
             if self._device_links is not None:
                 self._device_links.forget(node_id)
             _LOGGER.info("BILRESA wheel removed: node %s '%s'", node_id, wheel.name)
             async_dispatcher_send(self.hass, SIGNAL_WHEELS_UPDATED)
+
+    @callback
+    def _stop_node_actions(self, node_id) -> None:
+        """A remote going offline must not leave its hold task running."""
+        for key, binding in self._bindings.items():
+            if key[0] == node_id:
+                binding._handle_connection_change()
 
     # -- connection state + repair issue ----------------------------------
 

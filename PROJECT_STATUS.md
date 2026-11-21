@@ -1,5 +1,11 @@
 # Project status
 
+BILRESA.MasterControl 0.2.0 extends the existing runtime; it retains the
+`ikea_bilresa` domain, connection and entity identifiers. New hold lifecycle and
+linked-profile tests cover the software behaviour. Physical acceptance of all
+new migrated gestures must be confirmed on the target installation.
+
+
 This is an independent integration maintained by Les., based on the MIT-licensed
 Vituhlos integration at commit `67639e18d6d8595e87a31993802ae76745915a97`.
 

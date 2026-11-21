@@ -24,6 +24,7 @@ from custom_components.ikea_bilresa.panel_schema import (
 
 def test_every_numeric_binding_field_is_described() -> None:
     assert set(BINDING_NUMBERS) == {
+        "hold_max_seconds",
         CONF_STEP,
         CONF_ACCELERATION,
         CONF_FOLLOWER_MIN,

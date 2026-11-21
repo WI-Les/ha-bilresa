@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0 — BILRESA.MasterControl
+
+- Keep scrolling and all button gestures in the existing integration.
+- Add optional stop-on-release action sequences, a configurable 1–300 second hold limit (default 60), and release actions.
+- Prevent delayed hold validation from starting a run after release.
+- Add linked profiles for existing wheel channel bindings, preserving individual device identities.
+- Add observe-only button actions and action validation without execution for staged migrations.
+- Ignore duplicate Matter events without replaying button actions.
+
+
 ## 0.1.0
 
 - Publish the first stable release with the same integration code as

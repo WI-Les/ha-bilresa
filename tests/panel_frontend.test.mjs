@@ -368,6 +368,9 @@ test("dual-button editor starts without rotary or triple-press fields", () => {
     click_action: "toggle",
     button_response: "multi_press",
     hold_action: "toggle",
+    hold_max_seconds: 60,
+    hold_stop_on_release: false,
+    gestures_enabled: true,
     ramp_direction: "alternate",
   });
   assert.equal("mode" in panel._editorData, false);

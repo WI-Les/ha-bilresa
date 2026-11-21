@@ -1,6 +1,6 @@
 {
   "domain": "ikea_bilresa",
-  "name": "IKEA BILRESA",
+  "name": "BILRESA.MasterControl",
   "codeowners": [
     "@WI-Les"
   ],
@@ -18,5 +18,5 @@
   "issue_tracker": "https://github.com/WI-Les/ha-bilresa/issues",
   "requirements": [],
   "single_config_entry": true,
-  "version": "0.1.0"
+  "version": "0.2.0-rc.1"
 }

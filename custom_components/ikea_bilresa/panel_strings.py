@@ -28,6 +28,20 @@ DEFAULT_LANGUAGE = "en"
 # Both languages adjacent, deliberately. Add a key to one, add it to the other.
 STRINGS: dict[str, dict[str, str]] = {
     "en": {
+        "mode_buttons": "Buttons only (scroll does nothing)",
+        "gesture_activation": "Button actions",
+        "gesture_active": "Active",
+        "gesture_shadow": "Observe only (scrolling stays active)",
+        "hold_stop_on_release": "On release",
+        "hold_stop_enabled": "Stop hold actions",
+        "hold_stop_disabled": "Let hold actions finish",
+        "hold_max_seconds": "Maximum hold duration (seconds)",
+        "release_actions": "Actions after release",
+        "action_stop_hold": "Stop hold actions",
+        "shared_profile_notice": (
+            "Shared profile: {name}. Saving this channel updates its existing "
+            "bindings on the linked remotes."
+        ),
         # status
         "connected": "Connected",
         "unavailable": "Unavailable",
@@ -556,6 +570,20 @@ STRINGS: dict[str, dict[str, str]] = {
         "menu": "Open Home Assistant sidebar",
     },
     "cs": {
+        "mode_buttons": "Buttons only (scroll does nothing)",
+        "gesture_activation": "Button actions",
+        "gesture_active": "Active",
+        "gesture_shadow": "Observe only (scrolling stays active)",
+        "hold_stop_on_release": "On release",
+        "hold_stop_enabled": "Stop hold actions",
+        "hold_stop_disabled": "Let hold actions finish",
+        "hold_max_seconds": "Maximum hold duration (seconds)",
+        "release_actions": "Actions after release",
+        "action_stop_hold": "Stop hold actions",
+        "shared_profile_notice": (
+            "Shared profile: {name}. Saving this channel updates its existing "
+            "bindings on the linked remotes."
+        ),
         "connected": "Připojeno",
         "unavailable": "Nedostupné",
         "unknown": "Nehlásí se",

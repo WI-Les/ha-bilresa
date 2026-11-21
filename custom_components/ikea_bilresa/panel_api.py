@@ -35,6 +35,7 @@ from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
 )
+from homeassistant.helpers.script import async_validate_actions_config
 import voluptuous as vol
 
 from .binding_config import (
@@ -77,6 +78,7 @@ from .panel_models import (
 )
 from .panel_schema import SETTINGS_NUMBERS
 from .presentation import generated_binding_title, generated_button_binding_title
+from .profiles import synchronize_profiles
 
 TYPE_OVERVIEW = f"{DOMAIN}/overview"
 TYPE_OVERVIEW_SUBSCRIBE = f"{DOMAIN}/overview/subscribe"
@@ -86,6 +88,42 @@ TYPE_BINDING_DELETE = f"{DOMAIN}/binding/delete"
 TYPE_BINDING_TEST = f"{DOMAIN}/binding/test"
 TYPE_SETTINGS_SAVE = f"{DOMAIN}/settings/save"
 TYPE_TRACE = f"{DOMAIN}/trace"
+TYPE_BINDING_VALIDATE = f"{DOMAIN}/binding/validate"
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): TYPE_BINDING_VALIDATE,
+        vol.Required("data"): dict,
+        vol.Required("node_id"): str,
+        vol.Required("channel"): str,
+    }
+)
+@websocket_api.require_admin
+@websocket_api.async_response
+async def ws_binding_validate(hass, connection, msg):
+    """Validate an intended migration without saving or executing any actions."""
+    data, errors = validate_binding_data(
+        msg["data"], node_id=msg["node_id"], channel=msg["channel"]
+    )
+    if data is not None:
+        for field in (
+            "click_sequence",
+            "double_press_sequence",
+            "triple_press_sequence",
+            "hold_sequence",
+            "release_sequence",
+        ):
+            if data.get(field):
+                try:
+                    await async_validate_actions_config(hass, data[field])
+                # Validation errors from optional integrations are surfaced too.
+                except Exception as err:  # noqa: BLE001
+                    errors[field] = str(err)
+    connection.send_result(
+        msg["id"], {"ok": data is not None and not errors, "errors": errors}
+    )
+
 
 _COMMANDS_REGISTERED = f"{DOMAIN}_ws_registered"
 
@@ -553,6 +591,7 @@ def ws_binding_save(
         )
         saved = entry.subentries[existing.subentry_id]
 
+    synchronize_profiles(hass, entry, data=normalized)
     async_dispatcher_send(hass, SIGNAL_BINDINGS_UPDATED)
     connection.send_result(msg["id"], {"ok": True, "binding": _binding_payload(saved)})
 
@@ -769,6 +808,7 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_overview_subscribe)
     websocket_api.async_register_command(hass, ws_activity_subscribe)
     websocket_api.async_register_command(hass, ws_binding_save)
+    websocket_api.async_register_command(hass, ws_binding_validate)
     websocket_api.async_register_command(hass, ws_binding_delete)
     websocket_api.async_register_command(hass, ws_binding_test)
     websocket_api.async_register_command(hass, ws_settings_save)

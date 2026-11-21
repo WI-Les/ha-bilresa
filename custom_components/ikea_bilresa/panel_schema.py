@@ -20,6 +20,7 @@ from .const import (
     CONF_ACCELERATION,
     CONF_FOLLOWER_MIN,
     CONF_FOLLOWER_OFFSET,
+    CONF_HOLD_MAX_SECONDS,
     CONF_MAX_BRIGHTNESS,
     CONF_MIN_BRIGHTNESS,
     CONF_STEP,
@@ -51,6 +52,7 @@ class NumberField:
 
 
 BINDING_NUMBERS: dict[str, NumberField] = {
+    CONF_HOLD_MAX_SECONDS: NumberField(1, 300, 1, "s"),
     CONF_FOLLOWER_OFFSET: NumberField(-100, 100, 1, "%"),
     CONF_FOLLOWER_MIN: NumberField(1, 100, 1, "%"),
     CONF_STEP: NumberField(1, 25, 1, "%"),

@@ -80,6 +80,7 @@ from .device_link import WheelAvailability, resolve_matter_device, wheel_availab
 from .gesture_actions import target_service
 from .model import BilresaWheel
 from .panel_strings import localize
+from .profiles import profile_name
 
 CONTRACT_VERSION = 6
 
@@ -128,6 +129,13 @@ class GestureSummary:
     target_missing: bool = False
 
 
+def _shared_profile_name(hass, node_id):
+    entries = getattr(
+        getattr(hass, "config_entries", None), "async_entries", lambda _: []
+    )
+    return next((profile_name(entry, node_id) for entry in entries(DOMAIN)), None)
+
+
 @dataclass(slots=True)
 class BindingEditor:
     """Editable binding data with an optimistic-concurrency token."""
@@ -135,6 +143,7 @@ class BindingEditor:
     id: str
     revision: str
     data: dict[str, Any]
+    shared_profile: str | None = None
 
 
 @dataclass(slots=True)
@@ -579,7 +588,16 @@ def _wheel_gesture_summaries(
         summaries.append(_gesture_summary(hass, language, "release", "action_none"))
     elif hold_action == HOLD_RUN:
         summaries.append(_gesture_summary(hass, language, "hold", "action_run_actions"))
-        summaries.append(_gesture_summary(hass, language, "release", "action_none"))
+        summaries.append(
+            _gesture_summary(
+                hass,
+                language,
+                "release",
+                "action_stop_hold"
+                if data.get("hold_stop_on_release")
+                else "action_none",
+            )
+        )
     else:
         # HOLD_NONE and a toggle without a target both execute nothing.
         summaries.append(_gesture_summary(hass, language, "hold", "action_none"))
@@ -649,7 +667,16 @@ def _button_gesture_summaries(
         summaries.append(_gesture_summary(hass, language, "release", "action_none"))
     elif hold_action == HOLD_RUN:
         summaries.append(_gesture_summary(hass, language, "hold", "action_run_actions"))
-        summaries.append(_gesture_summary(hass, language, "release", "action_none"))
+        summaries.append(
+            _gesture_summary(
+                hass,
+                language,
+                "release",
+                "action_stop_hold"
+                if data.get("hold_stop_on_release")
+                else "action_none",
+            )
+        )
     else:
         summaries.append(_gesture_summary(hass, language, "hold", "action_none"))
         summaries.append(_gesture_summary(hass, language, "release", "action_none"))
@@ -740,6 +767,7 @@ def _channel_summaries(
                         id=subentry.subentry_id,
                         revision=binding_revision(subentry),
                         data=editor_data(data),
+                        shared_profile=_shared_profile_name(hass, wheel.node_id),
                     )
                     if hasattr(subentry, "subentry_id") and hasattr(subentry, "title")
                     else None
@@ -793,6 +821,7 @@ def _button_summaries(
                         id=subentry.subentry_id,
                         revision=binding_revision(subentry),
                         data=editor_data(data),
+                        shared_profile=_shared_profile_name(hass, wheel.node_id),
                     )
                     if hasattr(subentry, "subentry_id") and hasattr(subentry, "title")
                     else None
