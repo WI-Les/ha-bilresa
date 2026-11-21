@@ -10,6 +10,12 @@ three-light Zigbee2MQTT group in both directions on Home Assistant 2026.11.2. A 
 Chrome test confirmed manual installation, setup recovery and panel loading
 on Home Assistant 2026.11.1 with a simulated Matter device.
 
+On a fresh Home Assistant 2026.11.1 instance, Chrome installed 0.1.0
+through Marketplace with the pre-release setting off. The installed
+integration files matched the release tag. The configuration flow finished,
+the panel loaded at desktop and phone widths, and Home Assistant served both
+bundled icons. The test used simulated GitHub approval and Matter remotes.
+
 On the pilot installation, a physical press and release started and stopped
 a configured colour automation. The automation trace recorded seven light
 commands without errors. A separate BILRESA panel test verified that a media

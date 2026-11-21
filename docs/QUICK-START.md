@@ -65,7 +65,7 @@ For a local copy of the release, use the
 
    ![Marketplace connection confirmation with the Close button](images/marketplace-quick-start/06-connection-complete.png)
 
-### Choose the release and install
+### Install the stable release
 
 1. In the **Browse** tab, search for **IKEA BILRESA** and select the
    **IKEA BILRESA** result.
@@ -74,8 +74,13 @@ For a local copy of the release, use the
 
 2. Select **Install** on the repository page. Marketplace offers the stable
    release with its default settings.
+
+   ![Marketplace offering stable version v0.1.0 with the Install button](images/marketplace-quick-start/08-install-stable.png)
+
 3. Check that the confirmation dialog shows **v0.1.0** or a newer stable
    version, then select **Install** again.
+
+   ![Marketplace installation confirmation for BILRESA v0.1.0](images/marketplace-quick-start/10-confirm-install.png)
 
 ### Connect to Matter and open the panel
 
