@@ -7,6 +7,9 @@ Maintained by **Les.**, based on the work of [Vituhlos and contributors](https:/
 
 See the [changelog](CHANGELOG.md) for changes relative to the upstream release.
 
+The [illustrated user manual](docs/USER-GUIDE.md) walks through setup, channel
+bindings, follower lights, volume control and troubleshooting.
+
 ## Features
 
 - Discover supported BILRESA wheels and buttons through Matter.
