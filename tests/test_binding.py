@@ -2728,6 +2728,10 @@ def test_shadow_buttons_do_not_execute_actions(monkeypatch):
     for count in (1, 2, 3):
         binding._handle_action(_action(ACTION_PRESS, presses=count))
     assert not binding.pending
+    assert all(
+        call.kwargs.get("action") is not None
+        for call in binding._report_activity.call_args_list
+    )
 
 
 class _FakeScript:

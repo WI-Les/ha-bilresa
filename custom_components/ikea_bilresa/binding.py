@@ -402,6 +402,7 @@ class LightBinding:
         self._hold_stop_on_release = data.get(CONF_HOLD_STOP_ON_RELEASE, False)
         self._hold_max_seconds = float(data.get(CONF_HOLD_MAX_SECONDS, 60))
         self._hold_active = False
+        self._hold_origin: WheelAction | None = None
         self._hold_epoch = 0
         self._hold_watchdog_unsub: Callable[[], None] | None = None
         if data.get(CONF_RELEASE_SEQUENCE):
@@ -610,7 +611,7 @@ class LightBinding:
     @callback
     def _handle_action(self, action: WheelAction) -> None:
         if not self._gestures_enabled and action.type != ACTION_ROTATE:
-            self._report_activity("skipped", reason="shadow_gesture")
+            self._report_activity("skipped", reason="shadow_gesture", action=action)
             return
         if self._hold_active and action.type in (ACTION_PRESS, ACTION_ROTATE):
             self._stop_hold_sequence()
@@ -659,6 +660,7 @@ class LightBinding:
                 if self._hold_active:
                     return
                 self._hold_active = True
+                self._hold_origin = action
                 self._hold_off_rotation()
                 if self._hold_action == HOLD_RAMP:
                     self._start_ramp()
@@ -669,6 +671,7 @@ class LightBinding:
                 elif self._hold_action == HOLD_RUN:
                     self._stop_hold_sequence()
                     self._hold_active = True
+                    self._hold_origin = action
                     self._hold_epoch += 1
                     self._hold_watchdog_unsub = async_call_later(
                         self.hass, self._hold_max_seconds, self._hold_watchdog
@@ -2216,13 +2219,15 @@ class LightBinding:
     @callback
     def _hold_watchdog(self, _now) -> None:
         self._hold_watchdog_unsub = None
+        origin = self._hold_origin
         self._stop_hold_sequence()
-        self._report_activity("completed", reason="hold_timeout")
+        self._report_activity("completed", reason="hold_timeout", action=origin)
 
     @callback
     def _stop_hold_sequence(self) -> None:
         """Stop this physical binding's hold, including a not-yet-built run."""
         self._hold_active = False
+        self._hold_origin = None
         self._hold_epoch += 1
         if self._hold_watchdog_unsub is not None:
             self._hold_watchdog_unsub()
