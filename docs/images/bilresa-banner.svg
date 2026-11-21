@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 226" width="1100" height="226" role="img" aria-labelledby="title">
+  <title id="title">BILRESA for Home Assistant</title>
+  <defs>
+    <linearGradient id="background" x2="1" y2="1" gradientUnits="objectBoundingBox">
+      <stop stop-color="#15102b"/>
+      <stop offset="1" stop-color="#352050"/>
+    </linearGradient>
+    <radialGradient id="dial" cx=".32" cy=".18" r=".92">
+      <stop stop-color="#a987ef"/>
+      <stop offset="1" stop-color="#633bb4"/>
+    </radialGradient>
+    <clipPath id="canvas">
+      <rect width="1100" height="226" rx="22"/>
+    </clipPath>
+  </defs>
+  <g clip-path="url(#canvas)">
+    <rect width="1100" height="226" fill="url(#background)"/>
+    <g fill="none" stroke="#c09af6" stroke-opacity=".22">
+      <circle cx="875" cy="113" r="116"/>
+      <circle cx="875" cy="113" r="145"/>
+      <circle cx="875" cy="113" r="173"/>
+      <path d="M690 113h39m291 0h80M875 0v19m0 188v19"/>
+    </g>
+    <g transform="translate(875 113)">
+      <circle r="94" fill="#24173d" stroke="#9c73df" stroke-opacity=".7" stroke-width="2"/>
+      <circle r="86" fill="url(#dial)" stroke="#c6a5f7" stroke-opacity=".62"/>
+      <circle r="58" fill="none" stroke="#fff" stroke-width="5"/>
+      <path d="M0-51v7m0 88v7M-51 0h7m88 0h7M-36-36l5 5m62 62 5 5m0-72-5 5m-62 62-5 5" fill="none" stroke="#fff" stroke-width="4"/>
+      <circle r="20" fill="#fff"/>
+      <circle r="7" fill="#774cc3"/>
+    </g>
+    <g font-family="system-ui, 'Segoe UI', sans-serif">
+      <text x="65" y="117" fill="#fff" font-size="86" font-weight="800" letter-spacing="2">BILRESA</text>
+      <text x="69" y="166" fill="#e4d1ff" font-size="35" font-weight="550">for Home Assistant</text>
+    </g>
+  </g>
+  <rect x=".5" y=".5" width="1099" height="225" rx="21.5" fill="none" stroke="#a17dd9" stroke-opacity=".48"/>
+</svg>

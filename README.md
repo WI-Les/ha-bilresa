@@ -1,4 +1,6 @@
-# BILRESA for Home Assistant
+# ![BILRESA for Home Assistant](docs/images/bilresa-banner.svg)
+
+[![Open in HACS](docs/images/open-in-hacs.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=WI-Les&repository=ha-bilresa&category=integration)
 
 Control lights, media players and other Home Assistant devices with IKEA BILRESA
 Matter remotes. Configure channels and gestures in the Home Assistant interface.
@@ -33,7 +35,8 @@ volume, colour, follower lights, scenes and troubleshooting.
 ## Installation
 
 1. Add your remote to Home Assistant through Matter.
-2. Download BILRESA from the **Custom repositories** menu in Marketplace or HACS.
+2. Select **Open in HACS** above and download BILRESA. You can also add this
+   repository through **Custom repositories** in Marketplace or HACS.
 3. Restart Home Assistant, add **IKEA BILRESA** under **Settings → Devices & services**
    and open **IKEA BILRESA** in the sidebar.
 
