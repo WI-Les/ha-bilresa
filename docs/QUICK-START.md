@@ -20,18 +20,23 @@ to a scene.
 
 ## 2. Install IKEA BILRESA
 
-1. Open **HACS** or **Marketplace** from the Home Assistant sidebar. Open
-   its three-dot menu, then **Custom repositories**. The
-   [HACS guide](https://hacs.xyz/docs/faq/custom_repositories/) shows this menu.
-2. Enter `https://github.com/WI-Les/ha-bilresa`, choose **Integration**, and
-   select **Add**. Open the repository entry and download
-   [**0.1.0-rc.2**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.1.0-rc.2).
-   Enable pre-release versions if the selector hides it. To install from
-   files, use the
-   [manual installation steps](INSTALLATION.md#manual-installation).
-3. Restart Home Assistant. With an administrator account, go to **Settings →
-   Devices & services → Add integration**. Search for **IKEA BILRESA** in the
-   **Select brand** dialog and choose the result.
+On Home Assistant **2026.8–2026.10**, use the
+[HACS steps](INSTALLATION.md#hacs-on-older-home-assistant-versions) and
+continue at step 3. To install from files, see
+[manual installation](INSTALLATION.md#manual-installation).
+
+1. On Home Assistant **2026.11 or newer**, select [**Open in Marketplace**](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration).
+   You can also go to **Settings → Marketplace → Add from link** and enter
+   `https://github.com/WI-Les/ha-bilresa`. If Marketplace asks you to connect
+   GitHub, follow the sign-in prompt.
+2. On the BILRESA page, select **Install**. To install
+   [**0.1.0-rc.2**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.1.0-rc.2),
+   follow the [Marketplace pre-release steps](INSTALLATION.md#install-a-release-candidate)
+   before selecting **Install**.
+3. Restart if prompted. If the setup form did not open after installation,
+   go to **Settings → Devices & services → Add integration** as an
+   administrator. Search for **IKEA BILRESA** in the **Select brand** dialog
+   and choose the result.
 
    ![Home Assistant's Add integration search with the IKEA BILRESA result](images/user-guide/07-add-integration.png)
 

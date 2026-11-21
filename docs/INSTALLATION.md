@@ -11,18 +11,42 @@
   downgrade can change the stored configuration; follow the release notes and
   retain a rollback path.
 
-## Marketplace or HACS custom repository
+## Marketplace
 
-1. Open Marketplace or HACS and select **Custom repositories** from its menu.
-2. Add `https://github.com/WI-Les/ha-bilresa` with type **Integration**.
-3. Open the integration in the store and download a version. For a release
-   candidate, enable pre-release versions in the version selector if necessary.
-4. Restart Home Assistant. Go to **Settings → Devices & services → Add
-   integration**, select **IKEA BILRESA**, and follow the Matter Server setup.
+Home Assistant **2026.11 and newer** include Marketplace. Open it as an
+administrator and review the first-run notice.
 
-The public repository is a custom repository; it is not automatically included
-in the default Marketplace listing. Private development builds need a separately
-authorized private installation method and are not covered by these steps.
+1. Select [**Open in Marketplace**](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration).
+   You can also open **Settings → Marketplace → Add from link** and enter
+   `https://github.com/WI-Les/ha-bilresa`. Choose **Integration** if asked for
+   the type. Connect GitHub when prompted to add the custom repository.
+2. On the BILRESA repository page, select **Install** and confirm the version.
+   To install a release candidate, [enable pre-releases](#install-a-release-candidate)
+   first.
+3. Restart if prompted. If the setup form does not open automatically, go to
+   **Settings → Devices & services → Add integration**, select **IKEA BILRESA**
+   and follow the Matter Server setup.
+
+See the [Home Assistant Marketplace documentation](https://www.home-assistant.io/integrations/marketplace/)
+for details on custom repositories, GitHub sign-in and pre-releases.
+
+### Install a release candidate
+
+After adding the repository, open the BILRESA repository device under
+**Settings → Devices & services → Marketplace**. Enable its **Pre-release**
+entity and turn on the switch. Return to the BILRESA repository page to
+install the release candidate. Use [manual installation](#manual-installation)
+if the version you need is unavailable in Marketplace.
+
+## HACS on older Home Assistant versions
+
+On **2026.8–2026.10**, use HACS if installed. Select
+[**Open in HACS**](https://my.home-assistant.io/redirect/hacs_repository/?owner=WI-Les&repository=ha-bilresa&category=integration)
+or add `https://github.com/WI-Les/ha-bilresa` as an **Integration** under
+**HACS → Custom repositories**. Open the repository and download the release,
+enabling pre-release versions if needed. Restart Home Assistant. Add
+**IKEA BILRESA** in **Settings → Devices & services** and follow the Matter
+Server setup.
 
 ## Manual installation
 

@@ -23,15 +23,13 @@ If you are setting up your first remote, start with the
    border router and add the remote using the Home Assistant Companion app.
    Follow the [Home Assistant Matter guide](https://www.home-assistant.io/integrations/matter/#adding-a-matter-device-to-home-assistant).
 2. Confirm Home Assistant lists the remote under Matter.
-3. Add `https://github.com/WI-Les/ha-bilresa` as an **Integration** from
-   **Custom repositories** in Marketplace or HACS. Download a version and
-   enable pre-release versions in the selector if needed. For
-   manual installation, copy the complete `custom_components/ikea_bilresa`
-   directory, including `brand`, into your Home Assistant configuration
-   directory under `custom_components`. See the
-   [installation guide](INSTALLATION.md) for detailed steps.
-4. Restart Home Assistant. With an administrator account, open **Settings →
-   Devices & services → Add integration**, then search for **IKEA BILRESA**.
+3. Install BILRESA from [Marketplace](INSTALLATION.md#marketplace) on Home
+   Assistant 2026.11 or newer. On 2026.8–2026.10, use
+   [HACS](INSTALLATION.md#hacs-on-older-home-assistant-versions). You can also
+   [install it from files](INSTALLATION.md#manual-installation).
+4. Restart if prompted. If the setup form did not open after installation,
+   go to **Settings → Devices & services → Add integration** as an
+   administrator and search for **IKEA BILRESA**.
 5. In the setup form, keep the detected Matter Server address if correct.
    Otherwise, enter the WebSocket URL of the Matter Server that manages your
    remote, then select **Submit**.
