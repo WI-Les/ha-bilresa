@@ -10,3 +10,8 @@ available at the upstream repository; this repository begins with an attributed
 source snapshot rather than importing upstream history or hardware captures.
 
 Local brand icons are original artwork by Les. and are not IKEA logos.
+
+The Matter mark in the README banner identifies the protocol used by the
+[IKEA scroll wheel](https://csa-iot.org/csa_product/bilresa-scroll-wheel/)
+and [dual-button remote](https://csa-iot.org/csa_product/bilresa-dual-button/).
+Matter is a trademark of the Connectivity Standards Alliance.
