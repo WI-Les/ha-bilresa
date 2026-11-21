@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.0
+
+- Publish the first stable release with the same integration code as
+  `0.1.0-rc.2`.
+- Make the stable version available through the normal Marketplace installation
+  path.
+- Update the illustrated Quick Start and installation guide for first-time
+  setup.
+
 ## 0.1.0-rc.2
 
 - Reject overlapping follower light groups in both setup interfaces and

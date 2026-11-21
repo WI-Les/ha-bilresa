@@ -72,21 +72,10 @@ For a local copy of the release, use the
 
    ![Marketplace search results showing the IKEA BILRESA repository](images/marketplace-quick-start/07-find-repository.png)
 
-2. For the [v0.1.0-rc.2 release candidate](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.1.0-rc.2),
-   open the three-dot menu on the repository page and select
-   **Include pre-releases**.
-
-   ![BILRESA repository menu showing Include pre-releases](images/marketplace-quick-start/08-pre-release-menu.png)
-
-3. Select **Include** to confirm. Wait for the repository page to show the
-   release candidate as the available version.
-
-   ![BILRESA pre-release confirmation dialog with its Include button](images/marketplace-quick-start/09-include-pre-releases.png)
-
-4. Select **Install** on the repository page. Check that the confirmation
-   dialog shows **v0.1.0-rc.2**, then select **Install** again.
-
-   ![Marketplace installation confirmation for BILRESA v0.1.0-rc.2](images/marketplace-quick-start/10-confirm-install.png)
+2. Select **Install** on the repository page. Marketplace offers the stable
+   release with its default settings.
+3. Check that the confirmation dialog shows **v0.1.0** or a newer stable
+   version, then select **Install** again.
 
 ### Connect to Matter and open the panel
 

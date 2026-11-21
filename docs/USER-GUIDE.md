@@ -2,7 +2,7 @@
 
 Use the BILRESA panel to assign a scroll wheel or dual button to lights,
 speakers and other Home Assistant entities. This guide uses the English
-interface of BILRESA **0.1.0-rc.2**. Screenshots show a test installation with
+interface of BILRESA **0.1.0**. Screenshots show a test installation with
 example devices and controls.
 
 If you are setting up your first remote, start with the
