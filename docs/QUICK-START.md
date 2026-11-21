@@ -20,31 +20,89 @@ to a scene.
 
 ## 2. Install IKEA BILRESA
 
-On Home Assistant **2026.8–2026.10**, use the
-[HACS steps](INSTALLATION.md#hacs-on-older-home-assistant-versions) and
-continue at step 3. To install from files, see
-[manual installation](INSTALLATION.md#manual-installation).
+The screenshots show a fresh installation on Home Assistant **2026.11.1**.
+On **2026.8–2026.10**, use [HACS](INSTALLATION.md#hacs-on-older-home-assistant-versions).
+For a local copy of the release, use the
+[manual installation steps](INSTALLATION.md#manual-installation).
 
-1. On Home Assistant **2026.11 or newer**, select [**Open in Marketplace**](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration).
-   You can also go to **Settings → Marketplace → Add from link** and enter
-   `https://github.com/WI-Les/ha-bilresa`. If Marketplace asks you to connect
-   GitHub, follow the sign-in prompt.
-2. On the BILRESA page, select **Install**. To install
-   [**0.1.0-rc.2**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.1.0-rc.2),
-   follow the [Marketplace pre-release steps](INSTALLATION.md#install-a-release-candidate)
-   before selecting **Install**.
-3. Restart if prompted. If the setup form did not open after installation,
-   go to **Settings → Devices & services → Add integration** as an
-   administrator. Search for **IKEA BILRESA** in the **Select brand** dialog
-   and choose the result.
+### Open Marketplace
 
-   ![Home Assistant's Add integration search with the IKEA BILRESA result](images/user-guide/07-add-integration.png)
+1. Sign in to Home Assistant as an administrator. Open **Settings** in the
+   sidebar and choose **Marketplace**. You can also use the
+   [Open in Marketplace button](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration)
+   to go directly to BILRESA.
 
-4. Check the pre-filled **Matter Server WebSocket URL** and select **Submit**.
-   For a separate Matter Server, use the address already configured for the
-   Home Assistant Matter integration. The
-   [setup screen](USER-GUIDE.md#install-and-connect) shows where to enter it.
-5. Open **IKEA BILRESA** in the sidebar and select your remote.
+   ![Marketplace entry in Home Assistant Settings](images/marketplace-quick-start/01-settings.png)
+
+2. On your first visit, review the Marketplace notice. If you agree, tick
+   **I understand the risks and agree** and select **Continue**.
+
+   ![First-run Marketplace notice with the agreement checkbox and Continue button](images/marketplace-quick-start/02-notice.png)
+
+### Add BILRESA and connect GitHub
+
+1. In Marketplace, select **Add from link** in the top right.
+
+   ![Add from link button in the Marketplace toolbar](images/marketplace-quick-start/03-add-from-link.png)
+
+2. Paste `https://github.com/WI-Les/ha-bilresa` into **GitHub link** and
+   select **Add**. If asked to pick a type, choose **Integration**.
+
+   ![Add from a GitHub link dialog with the BILRESA repository filled in](images/marketplace-quick-start/04-repository-url.png)
+
+3. If **Connect GitHub** opens, select **Continue**.
+
+   ![Connect GitHub introduction with a Continue button](images/marketplace-quick-start/05-connect-github.png)
+
+4. Open the GitHub link in the dialog, sign in on GitHub and enter the code
+   shown in your own Home Assistant. Approve the connection on GitHub and
+   return to Home Assistant. The code in the screenshot is an example.
+
+   ![Home Assistant's GitHub device sign-in instructions with a demonstration code](images/marketplace-quick-start/06-device-code.png)
+
+5. In Home Assistant, select **Close** when Marketplace confirms the
+   connection. It then finishes adding the repository.
+
+   ![Marketplace connection confirmation with the Close button](images/marketplace-quick-start/06-connection-complete.png)
+
+### Choose the release and install
+
+1. In the **Browse** tab, search for **IKEA BILRESA** and select the
+   **IKEA BILRESA** result.
+
+   ![Marketplace search results showing the IKEA BILRESA repository](images/marketplace-quick-start/07-find-repository.png)
+
+2. For the [v0.1.0-rc.2 release candidate](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.1.0-rc.2),
+   open the three-dot menu on the repository page and select
+   **Include pre-releases**.
+
+   ![BILRESA repository menu showing Include pre-releases](images/marketplace-quick-start/08-pre-release-menu.png)
+
+3. Select **Include** to confirm. Wait for the repository page to show the
+   release candidate as the available version.
+
+   ![BILRESA pre-release confirmation dialog with its Include button](images/marketplace-quick-start/09-include-pre-releases.png)
+
+4. Select **Install** on the repository page. Check that the confirmation
+   dialog shows **v0.1.0-rc.2**, then select **Install** again.
+
+   ![Marketplace installation confirmation for BILRESA v0.1.0-rc.2](images/marketplace-quick-start/10-confirm-install.png)
+
+### Connect to Matter and open the panel
+
+1. Open the setup form when prompted. If a restart is required, restart Home
+   Assistant first. To open the form later, go to **Settings → Devices &
+   services → Add integration**, then search for
+   [**IKEA BILRESA**](images/user-guide/07-add-integration.png).
+2. Check the pre-filled **Matter Server WebSocket URL** and select
+   **Submit**. If you use a separate Matter Server, enter the address
+   configured for your Home Assistant Matter integration.
+
+   ![IKEA BILRESA Matter Server URL form with the Submit button](images/user-guide/01-matter-setup.png)
+
+3. Open **IKEA BILRESA** in the sidebar. Select your remote in the panel.
+
+   ![IKEA BILRESA in the Home Assistant sidebar with a scroll wheel and dual button in the panel](images/marketplace-quick-start/11-bilresa-panel.png)
 
 ## 3. Set up your first lamp
 

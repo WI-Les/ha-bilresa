@@ -29,14 +29,17 @@ administrator and review the first-run notice.
 
 See the [Home Assistant Marketplace documentation](https://www.home-assistant.io/integrations/marketplace/)
 for details on custom repositories, GitHub sign-in and pre-releases.
+The [Quick Start](QUICK-START.md#2-install-ikea-bilresa) shows the screens
+from a first installation.
 
 ### Install a release candidate
 
-After adding the repository, open the BILRESA repository device under
-**Settings → Devices & services → Marketplace**. Enable its **Pre-release**
-entity and turn on the switch. Return to the BILRESA repository page to
-install the release candidate. Use [manual installation](#manual-installation)
-if the version you need is unavailable in Marketplace.
+Open the BILRESA repository page in Marketplace. Select **Include
+pre-releases** from the three-dot menu, then select **Include**. Open
+**Install** and check the version shown. To pick a different published
+release, use **Install another version** from the same menu. Use
+[manual installation](#manual-installation) if the version you need is
+unavailable in Marketplace.
 
 ## HACS on older Home Assistant versions
 
