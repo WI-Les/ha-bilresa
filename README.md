@@ -3,6 +3,10 @@
 Control lights, media players and other Home Assistant devices with IKEA BILRESA
 Matter remotes. Configure channels and gestures in the Home Assistant interface.
 
+![BILRESA dashboard in Home Assistant showing a scroll wheel with dimming and volume bindings and a dual button](docs/images/user-guide/02-devices.png)
+
+*Dashboard preview with example devices.*
+
 Maintained by **Les.**, based on the work of [Vituhlos and contributors](https://github.com/Vituhlos/ha-ikea-bilresa). This independent community project is not affiliated with or endorsed by IKEA.
 
 See the [changelog](CHANGELOG.md) for changes relative to the upstream release.
