@@ -1,6 +1,17 @@
 # Changelog
 
-## 0.2.0 — BILRESA.MasterControl
+## 0.2.0-rc.2
+
+- Fix the binding editor's undefined shared-profile variable.
+- Label Buttons only correctly and avoid reporting brightness for its rotation.
+- Expose optional release actions with every hold choice and include them in
+  wheel/button summaries, including combined stop-and-run behaviour.
+- Reject invalid fallback JSON and incomplete release action rows before saving.
+- Use the MasterControl panel title and rewrite README, Quick Start and manual
+  with current examples, migration details and seven synthetic browser captures.
+- Document the upstream capability comparison and release/source distinction.
+
+## 0.2.0-rc.1 — BILRESA.MasterControl
 
 - Keep scrolling and all button gestures in the existing integration.
 - Add optional stop-on-release action sequences, a configurable 1–300 second hold limit (default 60), and release actions.

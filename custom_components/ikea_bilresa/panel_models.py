@@ -383,6 +383,7 @@ def _binding_by_endpoint(entry: Any, node_id: int) -> dict[int, Any]:
 # back returns None for every binding, which is how the first version of this
 # grid reported four configured channels as "not configured".
 _MODE_KEYS = {
+    "buttons": "mode_buttons",
     MODE_BRIGHTNESS: "mode_brightness",
     MODE_COLOR_TEMP: "mode_color_temp",
     MODE_COLOR: "mode_color",
@@ -515,8 +516,10 @@ def _wheel_gesture_summaries(
             hass,
             language,
             "rotation",
-            _QUANTITY_KEYS.get(mode, "quantity_brightness"),
-            target,
+            "action_none"
+            if mode == "buttons"
+            else _QUANTITY_KEYS.get(mode, "quantity_brightness"),
+            None if mode == "buttons" else target,
         )
     ]
 
@@ -602,6 +605,16 @@ def _wheel_gesture_summaries(
         # HOLD_NONE and a toggle without a target both execute nothing.
         summaries.append(_gesture_summary(hass, language, "hold", "action_none"))
         summaries.append(_gesture_summary(hass, language, "release", "action_none"))
+    if data.get("release_sequence"):
+        stops = hold_action == HOLD_RAMP or (
+            hold_action == HOLD_RUN and data.get("hold_stop_on_release")
+        )
+        summaries[-1] = _gesture_summary(
+            hass,
+            language,
+            "release",
+            "action_stop_hold_and_run" if stops else "action_run_actions",
+        )
     return summaries
 
 
@@ -680,6 +693,16 @@ def _button_gesture_summaries(
     else:
         summaries.append(_gesture_summary(hass, language, "hold", "action_none"))
         summaries.append(_gesture_summary(hass, language, "release", "action_none"))
+    if data.get("release_sequence"):
+        stops = hold_action == HOLD_RAMP or (
+            hold_action == HOLD_RUN and data.get("hold_stop_on_release")
+        )
+        summaries[-1] = _gesture_summary(
+            hass,
+            language,
+            "release",
+            "action_stop_hold_and_run" if stops else "action_run_actions",
+        )
     return summaries
 
 

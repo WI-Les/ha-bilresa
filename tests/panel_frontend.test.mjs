@@ -33,6 +33,19 @@ const newPanel = () => {
   return panel;
 };
 
+test("release actions reject refused JSON and incomplete action rows", () => {
+  const panel = newPanel();
+  panel._editorData = { release_sequence: [{action: "light.turn_off"}] };
+  panel._editorChoices = {};
+  panel._refusedText = new Map([["release_sequence|data|0", "{broken"]]);
+  assert.equal(panel._choiceErrors().release_sequence, "actions_invalid");
+  panel._refusedText.clear();
+  panel._editorData.release_sequence = [{action: ""}];
+  assert.equal(panel._choiceErrors().release_sequence, "actions_incomplete");
+  panel._editorData.release_sequence = [];
+  assert.equal(panel._choiceErrors().release_sequence, undefined);
+});
+
 test("live activity keeps only the selected wheel and stays bounded", async () => {
   let forward;
   let unsubscribed = 0;
@@ -1682,6 +1695,54 @@ const actionPanel = (data = {}) => {
 const PLAY = [
   { action: "media_player.media_play_pause", target: { entity_id: "media_player.tv" } },
 ];
+
+test("optional release actions stay editable for every hold choice on both variants", () => {
+  withFakeDom(() => {
+    for (const isButton of [false, true]) {
+      for (const hold_action of ["none", "toggle", "ramp", "run"]) {
+        const { panel } = actionPanel({hold_action});
+        panel._schema = () => ({ramp_target_domains: ["light"]});
+        for (const method of ["_selectField", "_entityField", "_numberField"]) {
+          panel[method] = () => new FakeNode("div");
+        }
+        panel._actionOptions = () => [];
+        panel._actionHelp = () => "";
+        const edited = [];
+        panel._actionsEditor = field => {
+          edited.push(field);
+          return new FakeNode("div");
+        };
+        panel._holdFields(new FakeNode("section"), isButton, []);
+        assert.ok(edited.includes("release_sequence"), `${isButton}/${hold_action}`);
+      }
+    }
+  });
+});
+
+test("binding editor renders shared profile notices for wheel and button controls", () => {
+  withFakeDom(() => {
+    globalThis.document.createElementNS = (_namespace, tag) => new FakeNode(tag);
+    for (const variant of ["wheel", "dual_button"]) {
+      const { panel } = actionPanel();
+      panel._schema = () => ({press_target_domains: [], mode_domains: {}, multi_target_modes: []});
+      for (const method of ["_selectField", "_entityField", "_numberField", "_discardButton"]) {
+        panel[method] = () => new FakeNode("div");
+      }
+      panel._formSection = (parent) => {
+        const node = new FakeNode("section");
+        parent.appendChild(node);
+        return node;
+      };
+      panel._holdFields = () => undefined;
+      panel._actionOptions = () => [];
+      panel._actionHelp = () => "";
+      const control = {channel: 1, button: 1, binding: {shared_profile: "Example pair"}};
+      panel._t = (key, vars) => key === "shared_profile_notice" ? vars.name : key;
+      const form = panel._bindingForm({variant}, control);
+      assert.ok(walk(form).some(node => node.textContent === "Example pair"));
+    }
+  });
+});
 
 test("a gesture set to run has no target, keeps its actions and is not 'none'", () => {
   const { panel } = actionPanel({

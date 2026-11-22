@@ -1,158 +1,82 @@
-# BILRESA quick start
+# Quick Start — BILRESA.MasterControl
 
-Set up one lamp first. A scroll wheel can switch it with a press and dim it
-as you turn. A dual button can switch it with a press. Once that works, you
-can add more lights, use another wheel channel for volume or assign a press
-to a scene.
+This guide covers **0.2.0-rc.2**. Start with one remote and one light, then add the other gestures. Screenshots show the shipped panel with synthetic examples; Home Assistant's native selectors and action editor can look different. [About the screenshots](SCREENSHOTS.md).
 
-## 1. Check your remote and lamp
+## 1. Prepare
 
-- Use Home Assistant **2026.8 or newer** with its **Matter** integration and
-  Matter Server. Under **Settings → Devices & services → Matter**, check that
-  your BILRESA remote is listed. For a new remote, use the Home Assistant
-  Companion app and follow the [Matter setup guide](https://www.home-assistant.io/integrations/matter/#adding-a-matter-device-to-home-assistant).
-  A Matter-over-Thread remote needs a Thread border router.
-- Pick a lamp you can already switch from Home Assistant. To try dimming,
-  choose one that also has a brightness slider.
-- Keep a Home Assistant backup before installing. If another automation
-  already handles the same press or turn, see the
-  [migration steps](INSTALLATION.md#configure-and-migrate).
+You need Home Assistant **2026.8+**, a working Matter integration/Matter Server and a BILRESA remote already commissioned into Matter. A Thread remote also needs working Thread infrastructure. Confirm that your first target light responds normally in Home Assistant.
 
-## 2. Install IKEA BILRESA
+Back up the existing integration and its configuration before upgrading. Keep old button automations and their enabled states so you can restore them.
 
-The screenshots show a fresh installation on Home Assistant **2026.11.1**.
-On **2026.8–2026.10**, use [HACS](INSTALLATION.md#hacs-on-older-home-assistant-versions).
-For a local copy of the release, use the
-[manual installation steps](INSTALLATION.md#manual-installation).
+## 2. Install BILRESA.MasterControl
 
-### Open Marketplace
+Use [Marketplace, HACS or manual installation](INSTALLATION.md). Check the version offered: the stable 0.1.0 release has the older interface; the current source candidate has MasterControl features. Downloading `main` and selecting a published release are different installation paths.
 
-1. Sign in to Home Assistant as an administrator. Open **Settings** in the
-   sidebar and choose **Marketplace**. You can also use the
-   [Open in Marketplace button](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration)
-   to go directly to BILRESA.
+Restart Home Assistant. For a new installation, choose **Settings → Devices & services → Add integration → BILRESA.MasterControl** and follow the connection flow. Existing `ikea_bilresa` installations retain their config entry and entities; do not add a second copy or re-pair the remote.
 
-   ![Marketplace entry in Home Assistant Settings](images/marketplace-quick-start/01-settings.png)
+The integration reuses the configured core Matter connection when possible. If setup asks for a connection, use the Matter Server WebSocket address reachable from Home Assistant, not the Home Assistant web address. See [connection troubleshooting](USER-GUIDE.md#troubleshooting).
 
-2. On your first visit, review the Marketplace notice. If you agree, tick
-   **I understand the risks and agree** and select **Continue**.
+## 3. Open your remote
 
-   ![First-run Marketplace notice with the agreement checkbox and Continue button](images/marketplace-quick-start/02-notice.png)
+Open **BILRESA.MasterControl** in the sidebar. Each discovered wheel remote shows three channels; a dual-button remote shows two buttons. Select your remote.
 
-### Add BILRESA and connect GitHub
+![Overview of example remotes](images/mastercontrol/01-overview.jpg)
 
-1. In Marketplace, select **Add from link** in the top right.
+If no remote appears, confirm its availability in Matter and check the panel diagnostics before changing bindings.
 
-   ![Add from link button in the Marketplace toolbar](images/marketplace-quick-start/03-add-from-link.png)
+## 4. Bind one light
 
-2. Paste `https://github.com/WI-Les/ha-bilresa` into **GitHub link** and
-   select **Add**. If asked to pick a type, choose **Integration**.
+In **Channels**, choose **Edit binding** for Channel 1:
 
-   ![Add from a GitHub link dialog with the BILRESA repository filled in](images/marketplace-quick-start/04-repository-url.png)
+1. Set **Mode → Smooth dimming**.
+2. Choose one light or a Home Assistant light group as **Target**.
+3. Start with **Target change per notch → 3%**. Keep **Smoothing of large jumps** at the default unless you have a reason to change it.
+4. Set **Short press → Toggle target**. Leave its target at **Same as the rotation target**.
+5. Save the binding.
 
-3. If **Connect GitHub** opens, select **Continue**.
+![Channel ledger listing rotation and each press gesture](images/mastercontrol/02-channels.jpg)
 
-   ![Connect GitHub introduction with a Continue button](images/marketplace-quick-start/05-connect-github.png)
+Turn the physical wheel in both directions on that channel. A target that is off may turn on when brightness increases. Check the actual target state as well as the Live test result.
 
-4. Open the GitHub link in the dialog, sign in on GitHub and enter the code
-   shown in your own Home Assistant. Approve the connection on GitHub and
-   return to Home Assistant. The code in the screenshot is an example.
+## 5. Add double and triple presses
 
-   ![Home Assistant's GitHub device sign-in instructions with a demonstration code](images/marketplace-quick-start/06-device-code.png)
+Edit the same binding and keep **Response → Wait for single/double/triple press**. This allows the integration to distinguish the gestures.
 
-5. In Home Assistant, select **Close** when Marketplace confirms the
-   connection. It then finishes adding the repository.
+- Assign **Double press → Run actions** to call a scene or script.
+- Assign **Triple press → Turn target off**, with the intended target selected.
+- Use **No action** for gestures you do not want.
 
-   ![Marketplace connection confirmation with the Close button](images/marketplace-quick-start/06-connection-complete.png)
+![Short press response and double press action editor](images/mastercontrol/03-button-actions.jpg)
 
-### Install the stable release
+The normal Home Assistant action editor is used when available. A simple list and JSON editor are supplied as a fallback. Use the [manual's examples](USER-GUIDE.md#run-home-assistant-actions) for repeats, delays and templates.
 
-1. In the **Browse** tab, search for **IKEA BILRESA** and select the
-   **IKEA BILRESA** result.
+## 6. Configure hold and release
 
-   ![Marketplace search results showing the IKEA BILRESA repository](images/marketplace-quick-start/07-find-repository.png)
+For simple dimming, choose **Hold → Ramp rotation target**. For a custom sequence, choose **Run actions**, enter its actions and select **On release → Stop hold actions** if it should run only while held.
 
-2. Select **Install** on the repository page. Marketplace offers the stable
-   release with its default settings.
+**Maximum hold duration** defaults to **60 seconds**, accepts **1–300 seconds**, and stops a hold sequence even if the release is lost. **Actions after release** is optional and runs after a recognized hold is released. A timeout does not run release actions.
 
-   ![Marketplace offering stable version v0.1.0 with the Install button](images/marketplace-quick-start/08-install-stable.png)
+![Stop-on-release, maximum hold duration and optional release actions](images/mastercontrol/04-hold-release.jpg)
 
-3. Check that the confirmation dialog shows **v0.1.0** or a newer stable
-   version, then select **Install** again.
+Use a delay inside continuous repeats. A light transition already accepted by a lamp can finish after the integration has stopped sending commands. See [hold behaviour](USER-GUIDE.md#hold-and-release) before using a continuous colour cycle.
 
-   ![Marketplace installation confirmation for BILRESA v0.1.0](images/marketplace-quick-start/10-confirm-install.png)
+## 7. Test and expand
 
-### Connect to Matter and open the panel
+Open **Live test** and use the physical remote. Check:
 
-1. Open the setup form when prompted. If a restart is required, restart Home
-   Assistant first. To open the form later, go to **Settings → Devices &
-   services → Add integration**, then search for
-   [**IKEA BILRESA**](images/user-guide/07-add-integration.png).
-2. Check the pre-filled **Matter Server WebSocket URL** and select
-   **Submit**. If you use a separate Matter Server, enter the address
-   configured for your Home Assistant Matter integration.
+- Both rotation directions and the active channel.
+- Single, double and triple presses that have assignments.
+- Hold start, release stop and any release action.
+- The actual light, speaker or other target response.
 
-   ![IKEA BILRESA Matter Server URL form with the Submit button](images/user-guide/01-matter-setup.png)
+![Live test showing an accepted example action](images/mastercontrol/06-live-test.jpg)
 
-3. Open **IKEA BILRESA** in the sidebar. Select your remote in the panel.
+The panel's action test controls send real commands on a real installation. “Home Assistant accepted the action” confirms dispatch; it does not prove that a lamp physically responded.
 
-   ![IKEA BILRESA in the Home Assistant sidebar with a scroll wheel and dual button in the panel](images/marketplace-quick-start/11-bilresa-panel.png)
+Then configure the other channels, [dual-button remotes](USER-GUIDE.md#dual-button-remotes) or [shared profiles](USER-GUIDE.md#shared-profiles).
 
-## 3. Set up your first lamp
+## Moving existing automations
 
-### Scroll wheel
+Start with **Button actions → Observe only (scrolling stays active)** while copying your actions. This suppresses the binding's button actions, but event entities, triggers and virtual switches can still drive existing automations. Disable the old automation for a gesture before activating its replacement binding.
 
-1. Open **Channels** and select **Edit binding** for **Channel 1**.
-2. In **Rotation**, choose **Smooth dimming** for **Mode**. Under **Target**,
-   select your lamp. Use **3%** for **Target change per notch** as a starting
-   point.
-
-   ![Rotation settings with Smooth dimming, a reading lamp and a 3% step](images/user-guide/08-dimming-setup.png)
-
-3. In **Short press**, choose **Toggle target** as the action. Leave
-   **Target** empty to use the lamp selected under **Rotation**. Leave double
-   press, triple press and hold at **No action** for this example.
-
-   ![Short press settings with Toggle target selected and the target left empty to use the rotation lamp](images/user-guide/09-short-press.png)
-
-4. Select **Save** at the bottom of the form. Check that **Channel 1** is
-   enabled. Use the button below the LEDs on the remote to select the first
-   channel.
-
-### Dual button
-
-1. Open **Buttons** and select **Edit binding** for **Button 1**.
-2. In **Short press**, choose **Toggle target** and select your lamp under
-   **Target**.
-3. Select **Save**. The
-   [Buttons tab screenshot](USER-GUIDE.md#configure-a-dual-button) shows
-   where each button is configured.
-
-## 4. Try it and check what happened
-
-Press the wheel or button once. The lamp should switch on or off. With
-the lamp on, turn the wheel a few notches each way to test dimming.
-
-If the lamp stays unchanged, open **Live test** in the BILRESA panel and
-try the same gesture.
-
-- **The gesture appears.** Expand **Test configured actions** and select
-  **Single press** on the same channel or button. This runs the action on
-  the actual lamp. If the lamp still stays unchanged, check the target and
-  verify that the binding is enabled.
-- **The gesture is missing.** Check that the remote is available in Matter
-  and that you are viewing the correct remote. On a wheel, also check
-  which channel you selected.
-
-See the [Live test screenshot](USER-GUIDE.md#test-your-controls) and
-[troubleshooting table](USER-GUIDE.md#troubleshoot) for more help.
-
-## What to try next
-
-| I want to… | Start here |
-| --- | --- |
-| Dim several lamps together | [Dim a light group](USER-GUIDE.md#dim-a-light-group) |
-| Keep an accent lamp dimmer than the main light | [Set a follower light](USER-GUIDE.md#example-brightness-and-follower-light) |
-| Use another channel for the speaker | [Set up volume](USER-GUIDE.md#example-volume) |
-| Change a lamp's colour | [Set up colour control](USER-GUIDE.md#example-colour) |
-| Use a press to start a scene or automation | [Use scenes and automations](USER-GUIDE.md#use-scenes-and-automations) |
+Keep the old automations disabled as a fallback. Do not delete colour-memory helpers or unrelated support automations simply because button actions moved into MasterControl. Follow [migration and recovery](MASTERCONTROL.md) for the full procedure.

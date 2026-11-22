@@ -48,6 +48,37 @@ from custom_components.ikea_bilresa.panel_models import (
 NODE_A = 13
 NODE_B = 14
 SERIAL = "household-serial"
+
+
+def test_buttons_only_never_claims_to_adjust_brightness():
+    from custom_components.ikea_bilresa.panel_models import _wheel_gesture_summaries
+
+    rows = _wheel_gesture_summaries(
+        _hass({"switch.example": _state("on", "Example switch")}),
+        {"mode": "buttons", "target": "switch.example"},
+        "en",
+    )
+    rotation = next(row for row in rows if row.gesture == "rotation")
+    assert rotation.action_label == "No action"
+    assert rotation.target_label is None
+
+
+def test_release_sequence_is_visible_beside_a_cancellable_hold():
+    from custom_components.ikea_bilresa.panel_models import _wheel_gesture_summaries
+
+    rows = _wheel_gesture_summaries(
+        _hass(),
+        {
+            "hold_action": "run",
+            "hold_stop_on_release": True,
+            "release_sequence": [{"event": "example"}],
+        },
+        "en",
+    )
+    release = next(row for row in rows if row.gesture == "release")
+    assert release.action_label == "Stop hold actions and run release actions"
+
+
 DUAL_BUTTON_FIXTURE = (
     Path(__file__).parent / "fixtures" / "bilresa_dual_button_node.json"
 )

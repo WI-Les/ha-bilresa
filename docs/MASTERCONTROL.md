@@ -1,5 +1,8 @@
 # BILRESA.MasterControl
 
+For 0.2.0-rc.2. See the illustrated [Quick Start](QUICK-START.md) and
+[full manual](USER-GUIDE.md) for everyday configuration.
+
 MasterControl keeps real-time scrolling and single, double, triple, hold and
 release actions in the existing integration. The domain remains `ikea_bilresa`;
 existing Matter pairings, channel entities and binding IDs are retained.
@@ -28,6 +31,8 @@ For migration, **Button actions → Observe only** recognizes gestures and repor
 them in Live test without executing their binding actions. Scrolling stays
 active. Disable the corresponding old button automations before changing this
 to **Active**. Do not leave both implementations controlling the same gestures.
+Observe-only suppresses direct binding actions only: event entities, named
+triggers and virtual switches still operate and can drive external automations.
 
 ## Shared profiles
 

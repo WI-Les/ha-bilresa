@@ -2228,7 +2228,7 @@ class IkeaBilresaPanel extends HTMLElement {
       );
       bar.appendChild(menu);
     }
-    bar.appendChild(el("h1", null, "IKEA BILRESA"));
+    bar.appendChild(el("h1", null, "BILRESA.MasterControl"));
     return bar;
   }
 
@@ -2715,6 +2715,12 @@ class IkeaBilresaPanel extends HTMLElement {
       else if (actions.some((item) => isSimpleAction(item) && !(item.action ?? item.service))) {
         errors[field] = "actions_incomplete";
       }
+    }
+    const release = data.release_sequence || [];
+    if ([...(this._refusedText?.keys() ?? [])].some((key) => key.startsWith("release_sequence|"))) {
+      errors.release_sequence = "actions_invalid";
+    } else if (release.some((item) => isSimpleAction(item) && !(item.action ?? item.service))) {
+      errors.release_sequence = "actions_incomplete";
     }
     return errors;
   }
@@ -3774,8 +3780,8 @@ class IkeaBilresaPanel extends HTMLElement {
       form.appendChild(message);
     }
 
-    if (channel.binding?.shared_profile) {
-      form.appendChild(el("p", "form-message", this._t("shared_profile_notice", {name: channel.binding.shared_profile})));
+    if (control.binding?.shared_profile) {
+      form.appendChild(el("p", "form-message", this._t("shared_profile_notice", {name: control.binding.shared_profile})));
     }
     // The gesture ledger above lists rotation, short, double, triple and hold
     // as one sequence. The editor follows that same order, and one grid row
@@ -4112,10 +4118,6 @@ class IkeaBilresaPanel extends HTMLElement {
         this._editorData.hold_stop_on_release = value === "true";
       }}));
       hold.appendChild(this._numberField("hold_max_seconds", this._t("hold_max_seconds")));
-      const release = el("div", "form-section");
-      release.appendChild(el("div", "form-section-title", this._t("release_actions")));
-      release.appendChild(this._actionsEditor("release_sequence", "release_sequence"));
-      hold.appendChild(release);
     } else if (holdAction !== "none" && (isButton || holdAction !== "ramp")) {
       hold.appendChild(
         this._entityField(
@@ -4162,6 +4164,11 @@ class IkeaBilresaPanel extends HTMLElement {
         ),
       );
     }
+    const release = el("div", "form-section");
+    release.appendChild(el("div", "form-section-title", this._t("release_actions")));
+    release.appendChild(this._actionsEditor("release_sequence", "release_sequence"));
+    hold.appendChild(release);
+
   }
 
   _channelDetail(wheel, channel) {
