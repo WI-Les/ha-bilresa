@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.0-rc.3
+
+- Restore the original README banner and official Open in Marketplace badge.
+- Use the existing three-dot channel symbols in the overview and Live test,
+  with matching upper/lower symbols for dual-button remotes.
+- Keep localized channel/button tooltips and accessible marker names.
+- Refresh all seven documentation screenshots and installation/version guidance
+  for the public MasterControl release candidate.
+- Retain the existing gesture behaviour, bindings, entity IDs and recovery path.
+
 ## 0.2.0-rc.2
 
 - Fix the binding editor's undefined shared-profile variable.

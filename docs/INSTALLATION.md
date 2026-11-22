@@ -1,10 +1,10 @@
 # Installation and migration
 
-Current source documentation: **BILRESA.MasterControl 0.2.0-rc.2**. Check the version
-offered by Marketplace/HACS: a commit on `main` is not automatically a release.
+Current release candidate: [**BILRESA.MasterControl 0.2.0-rc.3**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.2.0-rc.3).
+Enable **Include pre-releases** in Marketplace/HACS and select this version.
 Stable 0.1.0 uses the older IKEA BILRESA name and lacks the new MasterControl
-hold lifecycle and shared profiles. Use a published candidate when available,
-or install the intended source manually.
+hold lifecycle and shared profiles. A commit on `main` is not automatically a
+release; use the release archive for a reproducible manual installation.
 
 ## Before you start
 
