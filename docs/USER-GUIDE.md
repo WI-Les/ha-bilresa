@@ -38,7 +38,7 @@ Select a device for **Channels** or **Buttons**, **Live test**, and **Diagnostic
 
 ![Channel actions together in one ledger](images/mastercontrol/02-channels.jpg)
 
-The **active** checkbox enables or disables a channel's direct binding. Disabling it does not remove the binding or suppress event entities used by external automations. Save/Discard apply to the open editor. Concurrent edits are checked through binding revisions; review a conflict before saving again.
+The **active** checkbox enables or disables the whole channel in this integration. A disabled channel keeps its configuration but suppresses dispatch: no integration bus events, entity/dial/switch updates or direct binding actions. This differs from observe-only button actions, which retain events and scrolling. Save/Discard apply to the open editor. Concurrent edits are checked through binding revisions; review a conflict before saving again.
 
 The panel adapts to narrower screens. Documentation screenshots render the actual frontend with synthetic data outside a full Home Assistant frontend. The native Home Assistant selectors and action editor may differ. [Provenance and reproduction](SCREENSHOTS.md).
 
@@ -241,7 +241,7 @@ On a real installation, panel test controls execute configured actions and can m
 5. Test physical presses and hold/release before moving the next channel.
 6. Keep old automations disabled as a recovery path and retain helpers still used by the new sequences.
 
-Observe-only suppresses **the binding's direct button actions**. Scrolling remains active. Event entities, named triggers and virtual switches still operate, so external automations can act. It is not a system-wide dry run. A disabled binding or **No action** gesture likewise does not disable unrelated automations.
+Observe-only suppresses **the binding's direct button actions**. Scrolling remains active. Event entities, named triggers and virtual switches still operate, so external automations can act. It is not a system-wide dry run. **No action** leaves one binding gesture unassigned. In contrast, switching off the channel's **active** checkbox suppresses this integration's dispatch for the whole channel. None of these settings disables core Matter or unrelated controllers.
 
 Retain the config entry, Matter pairing and entity IDs when upgrading the same domain. See [MasterControl migration](MASTERCONTROL.md) and [rollback](INSTALLATION.md#rollback).
 

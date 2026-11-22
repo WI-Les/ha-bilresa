@@ -85,7 +85,10 @@ See [compatibility](COMPATIBILITY.md) for device capabilities and
 
 ## Rollback
 
-Disable the new channel binding before re-enabling its previous controller.
+Set the new button actions to observe-only and stop active holds before
+re-enabling the previous button controller. Keep the channel active when that
+controller depends on this integration's event entities or virtual switches;
+turning off the entire channel suppresses those events too.
 If rolling back the integration, restore the backed-up code and, when required,
 the matching configuration; restart Home Assistant and check the restored
 controllers. Do not assume that rolling back code alone reverses a configuration
