@@ -1,5 +1,11 @@
 # BILRESA.MasterControl
 
+![BILRESA for Home Assistant with the scroll wheel and dual-button Matter remotes](docs/images/bilresa-remotes-banner.jpg)
+
+<!-- ha-marketplace:exclude-start -->
+[![Open in Marketplace on My Home Assistant](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration)
+<!-- ha-marketplace:exclude-end -->
+
 Real-time scrolling, single/double/triple presses, hold and release in one Home Assistant integration for IKEA BILRESA Matter remotes.
 
 [Quick Start](docs/QUICK-START.md) · [Full manual](docs/USER-GUIDE.md) · [Installation and rollback](docs/INSTALLATION.md) · [Changelog](CHANGELOG.md)
@@ -21,13 +27,15 @@ Targets can use any supported Home Assistant integration; they do not need to be
 
 ## Version and installation
 
-This branch documents **0.2.0-rc.2**, the MasterControl release candidate. A source version on `main` is not automatically a published Marketplace/HACS release. Check the version offered before installing; stable **0.1.0** predates MasterControl's shared profiles and bounded hold actions.
+The current MasterControl release candidate is [**0.2.0-rc.3**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.2.0-rc.3). Enable **Include pre-releases** in Marketplace/HACS and select that version. Stable **0.1.0** predates MasterControl's shared profiles and bounded hold actions.
 
-- Home Assistant **2026.11+**: [Open in Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration). Include pre-releases only if the intended candidate is published there.
+- Home Assistant **2026.11+**: [Open in Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration), enable pre-releases and choose **0.2.0-rc.3**.
 - Home Assistant **2026.8–2026.10**: [Open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=WI-Les&repository=ha-bilresa&category=integration).
 - For the current source candidate: follow [manual installation](docs/INSTALLATION.md#manual-installation).
 
 The integration name and sidebar are **BILRESA.MasterControl**. Its folder and domain remain `ikea_bilresa`; upgrading an existing installation does not require re-pairing devices or changing entity IDs. Install only one implementation of this domain.
+
+Overview and Live test identify wheel channels with the same three-dot symbols as the detail pages. The highlighted dot identifies the channel, not connection status. Dual-button remotes use the matching upper/lower button symbol.
 
 ## Start with one channel
 

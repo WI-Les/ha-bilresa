@@ -113,6 +113,20 @@ def test_readme_links_to_hardware_plan() -> None:
     assert "docs/HARDWARE-VALIDATION.md" in _links(README_EN)
 
 
+def test_readme_preserves_the_banner_and_marketplace_install_button() -> None:
+    text = README_EN.read_text(encoding="utf-8")
+    assert "docs/images/bilresa-remotes-banner.jpg" in _links(README_EN)
+    assert (
+        "[![Open in Marketplace on My Home Assistant]"
+        "(https://my.home-assistant.io/badges/marketplace_repository.svg)]"
+        "(https://my.home-assistant.io/redirect/marketplace_repository/"
+        "?owner=WI-Les&repository=ha-bilresa&category=integration)"
+    ) in text
+    assert text.index("bilresa-remotes-banner.jpg") < text.index(
+        "marketplace_repository.svg"
+    )
+
+
 def test_the_link_pattern_reads_titles_and_parentheses() -> None:
     line = (
         "[a](plain.md) [b](page_(draft).md#x) [c](<with space.md>) "

@@ -506,16 +506,13 @@ const STYLES = `
     background: var(--_card);
   }
   .channel:last-child { border-block-end: 0; }
-  .channel-n {
+  .control-marker {
     flex: 0 0 auto;
-    inline-size: 28px;
-    block-size: 28px;
-    display: grid;
-    place-items: center;
-    border-radius: 50%;
-    background: color-mix(in srgb, var(--_ink) 16%, var(--_card));
-    font-size: var(--ha-font-size-s, 12px);
-    font-weight: var(--ha-font-weight-medium, 500);
+    inline-size: 32px;
+    min-block-size: 28px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
   }
   .channel-text { min-inline-size: 0; flex: 1; }
   .channel-primary,
@@ -2291,10 +2288,9 @@ class IkeaBilresaPanel extends HTMLElement {
 
   _overviewControl(device, control) {
     const configured = this._isConfigured(control);
-    const number = this._controlNumber(device, control);
     const row = el("span", "channel");
     row.dataset.state = configured ? "ok" : "empty";
-    row.appendChild(el("span", "channel-n", String(number)));
+    row.appendChild(this._controlMarker(device, control));
 
     // The light is what a person recognises; "Smooth dimming" was the same on
     // every row of a typical home, so it no longer leads.
@@ -2324,6 +2320,24 @@ class IkeaBilresaPanel extends HTMLElement {
       row.appendChild(svg(ICON.alert, "channel-warn"));
     }
     return row;
+  }
+
+  _controlMarker(device, control) {
+    const isButton = device.variant === "dual_button";
+    const number = this._controlNumber(device, control);
+    const label = this._t(isButton ? "button_title" : "channel_title", {
+      [isButton ? "button" : "channel"]: number,
+    });
+    const marker = el("span", "control-marker");
+    marker.title = label;
+    marker.setAttribute("role", "img");
+    marker.setAttribute("aria-label", label);
+    marker.appendChild(
+      isButton
+        ? buttonHalves(number)
+        : channelLeds(number, this._controlsFor(device).length),
+    );
+    return marker;
   }
 
   _wheel(wheel) {
@@ -4893,7 +4907,7 @@ class IkeaBilresaPanel extends HTMLElement {
     for (const control of this._controlsFor(wheel)) {
       const number = this._controlNumber(wheel, control);
       const row = el("div", "live-channel");
-      row.appendChild(el("span", "channel-n", String(number)));
+      row.appendChild(this._controlMarker(wheel, control));
       const copy = el("div", "live-channel-copy");
       copy.appendChild(
         el(

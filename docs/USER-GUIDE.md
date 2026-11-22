@@ -1,6 +1,6 @@
 # BILRESA.MasterControl manual
 
-For **0.2.0-rc.2**. The integration's display name is BILRESA.MasterControl; its technical domain and component folder remain `ikea_bilresa`.
+For **0.2.0-rc.3**. The integration's display name is BILRESA.MasterControl; its technical domain and component folder remain `ikea_bilresa`.
 
 [Quick Start](QUICK-START.md) · [Installation](INSTALLATION.md) · [Migration and recovery](MASTERCONTROL.md)
 
@@ -35,6 +35,8 @@ Open **BILRESA.MasterControl** from the sidebar. Device names and areas come fro
 ![Device overview](images/mastercontrol/01-overview.jpg)
 
 Select a device for **Channels** or **Buttons**, **Live test**, and **Diagnostics**. The channel ledger lists rotation, short press, double press, triple press and hold/release together. Only relevant assigned gestures appear. Choose **Edit binding** to configure them in the same order.
+
+The overview and Live test use the same three-dot channel symbols as the detail pages. The first, second or third highlighted dot means Channel 1, 2 or 3; it is a channel identifier, not a connection indicator. Dual-button remotes use the upper/lower physical button symbol. Markers retain localized tooltips and accessible channel/button names.
 
 ![Channel actions together in one ledger](images/mastercontrol/02-channels.jpg)
 

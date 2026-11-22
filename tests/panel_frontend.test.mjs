@@ -1692,6 +1692,38 @@ const actionPanel = (data = {}) => {
   return { panel, renders: () => renders };
 };
 
+test("overview and Live test use accessible channel dots and physical button halves", () => {
+  withFakeDom(() => {
+    globalThis.document.createElementNS = (_namespace, tag) => new FakeNode(tag);
+    const panel = newPanel();
+    panel._t = (key, vars = {}) => `${key}:${vars.channel ?? vars.button ?? ""}`;
+    for (const variant of ["wheel", "dual_button"]) {
+      const controls = variant === "wheel"
+        ? [1, 2, 3].map(channel => ({channel, configured: false}))
+        : [1, 2].map(button => ({button, configured: false}));
+      const device = {variant, channels: controls, buttons: controls};
+      for (const [index, control] of controls.entries()) {
+        const row = panel._overviewControl(device, control);
+        const marker = walk(row).find(node => node.className === "control-marker");
+        assert.equal(marker.attrs.role, "img");
+        assert.equal(marker.attrs["aria-label"], `${variant === "wheel" ? "channel" : "button"}_title:${index + 1}`);
+        assert.equal(marker.title, marker.attrs["aria-label"]);
+        if (variant === "wheel") {
+          const dots = walk(marker).filter(node => node.className === "channel-led");
+          assert.equal(dots.length, 3);
+          assert.deepEqual(dots.map(dot => dot.dataset.on === "true"), [0, 1, 2].map(at => at === index));
+        } else {
+          const selected = walk(marker).find(node => node.attrs.class === "button-dot");
+          assert.equal(Number(selected.attrs.cy), index === 0 ? 17 : 46.3);
+        }
+      }
+      const live = panel._liveControls(device);
+      assert.equal(walk(live).filter(node => node.className === "control-marker").length, controls.length);
+      assert.equal(walk(live).some(node => node.className === "channel-n"), false);
+    }
+  });
+});
+
 const PLAY = [
   { action: "media_player.media_play_pause", target: { entity_id: "media_player.tv" } },
 ];

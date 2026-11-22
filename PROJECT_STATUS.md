@@ -1,6 +1,6 @@
 # Project status
 
-BILRESA.MasterControl 0.2.0-rc.2 extends the existing runtime; it retains the
+BILRESA.MasterControl 0.2.0-rc.3 extends the existing runtime; it retains the
 `ikea_bilresa` domain, connection and entity identifiers. New hold lifecycle and
 linked-profile tests cover the software behaviour. Physical acceptance of all
 new migrated gestures must be confirmed on the target installation.
@@ -10,7 +10,10 @@ press response, bounded hold sequences, release actions, observe-only migration
 and linked profiles. Seven browser screenshots show the production panel with
 synthetic data; see [screenshot provenance](docs/SCREENSHOTS.md). They do not
 establish physical hardware response. The source candidate is distinct from
-published Marketplace/HACS releases.
+published Marketplace/HACS releases. Candidate 0.2.0-rc.3 is published separately
+from stable 0.1.0; enable pre-releases to select it. The original README banner
+and official Marketplace button are retained. Overview and Live test now reuse
+the detail pages' channel dots and upper/lower button symbols.
 
 The [upstream comparison](docs/UPSTREAM-COMPARISON.md) records the original
 project's retained capabilities and this fork's additions. The editor, release
