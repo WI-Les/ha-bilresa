@@ -1,105 +1,59 @@
 # BILRESA.MasterControl
 
-# ![BILRESA for Home Assistant with the scroll wheel and dual-button Matter remotes](docs/images/bilresa-remotes-banner.jpg)
+Real-time scrolling, single/double/triple presses, hold and release in one Home Assistant integration for IKEA BILRESA Matter remotes.
 
-<!-- ha-marketplace:exclude-start -->
-[![Open in Marketplace on My Home Assistant](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration)
-<!-- ha-marketplace:exclude-end -->
+[Quick Start](docs/QUICK-START.md) · [Full manual](docs/USER-GUIDE.md) · [Installation and rollback](docs/INSTALLATION.md) · [Changelog](CHANGELOG.md)
 
-Use an IKEA BILRESA remote to dim the lights, adjust a speaker or launch a scene.
-Choose what each turn or press does in the Home Assistant panel.
+![MasterControl overview with two wheel remotes and a dual-button remote](docs/images/mastercontrol/01-overview.jpg)
 
-- **[Quick Start](docs/QUICK-START.md)** — Install the integration and set up your first lamp.
-- **[Full Manual](docs/USER-GUIDE.md)** — Configure both remotes, explore examples and troubleshoot.
+*The shipped panel rendered with synthetic example devices. Screenshots demonstrate the interface, not physical hardware validation. [Screenshot provenance](docs/SCREENSHOTS.md).*
 
-## Central button and scroll control
+## What you can control
 
-Version 0.2.0 adds bounded hold actions that stop on release, optional release
-sequences, observe-only button actions for migration, and linked profiles for
-existing channel bindings. Scroll settings and entity IDs are retained.
-See [MasterControl setup and rollback](docs/MASTERCONTROL.md).
+- Turn the wheel to adjust brightness, colour temperature, colour, volume, covers, climate temperature, fans or numeric values. Bind a light group or several lights together.
+- Configure short, double and triple presses independently; toggle a target, select a supported action, cycle scenes or run a Home Assistant action sequence.
+- Hold to ramp a light or run actions such as colour cycling. Choose stop on release, set a maximum duration and optionally run actions after release.
+- Use **Buttons only** when a wheel channel needs press actions without rotation commands. Dual-button remotes have their own button bindings and fixed up/down hold ramps.
+- Link wheel remotes through a shared profile while retaining each remote's entities and independent hold/release sessions.
+- Inspect recognized gestures, action results and diagnostics in one panel. Keep event entities, named automation triggers, virtual switches and channel dials for automation-based setups.
 
-## Get started
+Targets can use any supported Home Assistant integration; they do not need to be Matter devices. The remote itself must be commissioned into Home Assistant Matter.
 
-You need **Home Assistant 2026.8 or newer**, its Matter integration and Matter
-Server, and a BILRESA remote paired over Matter. The remote uses Thread, so
-you also need a Thread border router.
+## Version and installation
 
-1. Check that your remote appears under **Settings → Devices & services → Matter**.
-2. On Home Assistant 2026.11 or newer, add BILRESA from **Settings → Marketplace**.
-   On 2026.8–2026.10, use the [HACS steps](docs/INSTALLATION.md#hacs-on-older-home-assistant-versions).
-3. Follow the setup prompt or add **BILRESA.MasterControl** under **Settings → Devices &
-   services**. Restart if prompted, then open **BILRESA.MasterControl** in the sidebar.
+This branch documents **0.2.0-rc.2**, the MasterControl release candidate. A source version on `main` is not automatically a published Marketplace/HACS release. Check the version offered before installing; stable **0.1.0** predates MasterControl's shared profiles and bounded hold actions.
 
-See the [installation guide](docs/INSTALLATION.md) for pre-releases, manual
-installation and migration from an existing setup.
+- Home Assistant **2026.11+**: [Open in Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration). Include pre-releases only if the intended candidate is published there.
+- Home Assistant **2026.8–2026.10**: [Open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=WI-Les&repository=ha-bilresa&category=integration).
+- For the current source candidate: follow [manual installation](docs/INSTALLATION.md#manual-installation).
 
-## What you can do
+The integration name and sidebar are **BILRESA.MasterControl**. Its folder and domain remain `ikea_bilresa`; upgrading an existing installation does not require re-pairing devices or changing entity IDs. Install only one implementation of this domain.
 
-### Manage both remotes in one panel
+## Start with one channel
 
-Select a remote to see its current assignments and edit them. This example
-uses the same scroll wheel for the reading lamp on channel 1 and the speaker
-on channel 2. The dual button has two controls you can assign independently.
+1. Install the intended version and restart Home Assistant.
+2. Add **BILRESA.MasterControl** under **Settings → Devices & services** if it is not already configured.
+3. Open the sidebar panel, select a remote and edit a channel. Choose **Smooth dimming**, a light and **3%** per notch.
+4. Assign the press actions you want and save. Keep **Wait for single/double/triple press** when using all gestures.
+5. Check rotation, each configured press count and hold/release on the physical remote.
 
-![Device overview showing the scroll wheel with a lamp and speaker and the dual-button remote](docs/images/user-guide/02-devices.png)
+For an existing automation setup, use [observe-only migration](docs/USER-GUIDE.md#migrate-existing-button-automations) and keep a [rollback copy](docs/INSTALLATION.md#rollback). Avoid having both the binding and an old automation execute the same gesture.
 
-*This demo uses example devices. They show **Not reporting** until the panel receives a gesture.*
+## Read more
 
-### Dim a lamp or a group
+| Guide | Contents |
+| --- | --- |
+| [Quick Start](docs/QUICK-START.md) | First working channel and gesture checklist |
+| [Full manual](docs/USER-GUIDE.md) | Control modes, actions, hold/release, profiles, triggers and troubleshooting |
+| [Installation](docs/INSTALLATION.md) | Marketplace, HACS, manual updates and rollback |
+| [MasterControl migration](docs/MASTERCONTROL.md) | Preserving an existing installation |
+| [Upstream comparison](docs/UPSTREAM-COMPARISON.md) | What is retained from Vituhlos and what this fork adds |
+| [Compatibility](docs/COMPATIBILITY.md) | Device capabilities and limitations |
+| [Hardware validation](docs/HARDWARE-VALIDATION.md) | Physical acceptance checklist |
+| [Project status](PROJECT_STATUS.md) | Software evidence and limits of hardware evidence |
 
-Choose **Smooth dimming**, pick a light or group and set how much one notch
-changes brightness. In this example, the wheel adjusts the reading lamp by
-3% per notch. A separate press action can switch the same lamp on and off.
-
-![Smooth dimming editor showing Reading lamp and a 3% change per notch](docs/images/user-guide/08-dimming-setup.png)
-
-Use a [follower light](docs/USER-GUIDE.md#example-brightness-and-follower-light)
-to keep an accent lamp dimmer than the main lamp while both are on. You can
-also [dim a Zigbee2MQTT group](docs/USER-GUIDE.md#dim-a-light-group) that Home
-Assistant exposes as a brightness-capable light.
-
-### Adjust volume on another channel
-
-Choose **Volume**, select a compatible media player and start with a small
-step. In this example, each notch changes the speaker volume by 3%. You can
-assign play/pause to a short press.
-
-![Volume editor showing the living room speaker and a 3% change per notch](docs/images/user-guide/10-set-volume.png)
-
-Other wheel modes include [colour and colour temperature](docs/USER-GUIDE.md#example-colour),
-cover position, fan speed and climate settings. See
-[compatibility](docs/COMPATIBILITY.md) for the capabilities each target needs.
-
-### Give each button a job
-
-Open **Buttons** on a dual-button remote and select **Edit binding**. For
-example, set one button to switch a lamp and the other to start a scene.
-You can also [use gestures in Home Assistant automations](docs/USER-GUIDE.md#use-scenes-and-automations).
-
-![Dual-button remote showing independent Edit binding controls for Button 1 and Button 2](docs/images/user-guide/06-dual-button-panel.png)
-
-### Check a gesture before changing your setup
-
-Open **Live test** and use your remote to see which gesture arrived. Then
-expand **Test configured actions** to check the assigned action from the
-panel. These controls run the action on the selected target.
-
-![Live test with rotate, press and hold controls for two configured wheel channels](docs/images/user-guide/05-live-test.png)
-
-The [troubleshooting guide](docs/USER-GUIDE.md#troubleshoot) covers missing
-remotes, lights that jump between levels and volume that stays fixed.
-
-## Releases and validation
-
-See the [releases](https://github.com/WI-Les/ha-bilresa/releases) for available
-versions and the [changelog](CHANGELOG.md) for changes. The
-[project status](PROJECT_STATUS.md) and [hardware validation plan](docs/HARDWARE-VALIDATION.md)
-record test coverage and the device combinations still to check.
+Automated tests and panel simulations verify software behaviour. They cannot establish the feel, delivery or timing of every physical remote and target combination.
 
 ## Credits and license
 
-Maintained by **Les.**, based on the work of [Vituhlos and contributors](https://github.com/Vituhlos/ha-ikea-bilresa).
-This is an independent community project.
-The upstream MIT license and copyright are retained in [LICENSE](LICENSE).
-See [third-party notices](THIRD_PARTY_NOTICES.md) for source attribution.
+Independent integration maintained by **Les.**, based on the MIT-licensed [Vituhlos/ha-ikea-bilresa](https://github.com/Vituhlos/ha-ikea-bilresa) project. The original real-time Matter gesture engine and binding interface are retained and extended. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
