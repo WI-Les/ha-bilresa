@@ -2633,6 +2633,107 @@ _PLAY_PAUSE = [
 ]
 
 
+def test_releasing_before_hold_validation_prevents_the_run(monkeypatch):
+    binding = _sequence_binding(monkeypatch, "hold", hold_stop_on_release=True)
+    _press(binding, "hold")
+    binding._handle_action(_action(ACTION_RELEASE))
+    _drain(binding)
+    assert not any(script.runs for script in _FakeScript.built)
+
+
+def test_releasing_a_running_hold_stops_its_script(monkeypatch):
+    binding = _sequence_binding(monkeypatch, "hold", hold_stop_on_release=True)
+    _press(binding, "hold")
+    _drain(binding)
+    [script] = _FakeScript.built
+    binding._handle_action(_action(ACTION_RELEASE))
+    _drain(binding)
+    assert script.stopped
+
+
+def test_release_between_script_build_and_start_prevents_the_run(monkeypatch):
+    binding = _sequence_binding(monkeypatch, "hold", hold_stop_on_release=True)
+    _press(binding, "hold")
+    asyncio.run(binding.pending.pop(0))
+    binding._handle_action(_action(ACTION_RELEASE))
+    _drain(binding)
+    assert not any(script.runs for script in _FakeScript.built)
+
+
+def test_a_late_stop_cannot_stop_the_next_hold(monkeypatch):
+    binding = _sequence_binding(monkeypatch, "hold", hold_stop_on_release=True)
+    _press(binding, "hold")
+    _drain(binding)
+    first = _FakeScript.built[-1]
+    binding._handle_action(_action(ACTION_RELEASE))
+    _press(binding, "hold")
+    _drain(binding)
+    second = _FakeScript.built[-1]
+    assert first is not second
+    assert first.stopped
+    assert not second.stopped
+
+
+def test_buttons_only_rotation_never_dispatches_a_command(monkeypatch):
+    binding, _, _ = _binding(monkeypatch, mode="buttons", target="switch.test")
+    binding._rotate_by = Mock()
+    binding._handle_action(_action(ACTION_ROTATE))
+    binding._rotate_by.assert_not_called()
+
+
+def test_duplicate_hold_starts_once_and_watchdog_stops_it(monkeypatch):
+    binding = _sequence_binding(monkeypatch, "hold", hold_stop_on_release=True)
+    _press(binding, "hold")
+    _press(binding, "hold")
+    _drain(binding)
+    [script] = _FakeScript.built
+    assert len(script.runs) == 1
+    binding._hold_watchdog(None)
+    _drain(binding)
+    assert script.stopped
+
+
+def test_release_does_not_stop_another_remotes_hold(monkeypatch):
+    first = _sequence_binding(monkeypatch, "hold", hold_stop_on_release=True)
+    second = _sequence_binding(monkeypatch, "hold", hold_stop_on_release=True)
+    _press(first, "hold")
+    _drain(first)
+    old_script = _FakeScript.built[-1]
+    _press(second, "hold")
+    _drain(second)
+    new_script = _FakeScript.built[-1]
+    first._handle_action(_action(ACTION_RELEASE))
+    _drain(first)
+    assert old_script.stopped
+    assert not new_script.stopped
+
+
+def test_release_actions_only_run_after_a_hold(monkeypatch):
+    binding = _sequence_binding(
+        monkeypatch, "hold", hold_stop_on_release=True, release_sequence=_PLAY_PAUSE
+    )
+    binding._handle_action(_action(ACTION_RELEASE))
+    assert not binding.pending
+    _press(binding, "hold")
+    _drain(binding)
+    binding._handle_action(_action(ACTION_RELEASE))
+    _drain(binding)
+    assert _FakeScript.built[-1].runs[0][0]["gesture"] == "release"
+
+
+def test_shadow_buttons_do_not_execute_actions(monkeypatch):
+    binding = _sequence_binding(monkeypatch, "hold", gestures_enabled=False)
+    for kind in (ACTION_HOLD, ACTION_RELEASE):
+        binding._handle_action(_action(kind))
+    for count in (1, 2, 3):
+        binding._handle_action(_action(ACTION_PRESS, presses=count))
+    assert not binding.pending
+    assert all(
+        call.kwargs.get("action") is not None
+        for call in binding._report_activity.call_args_list
+    )
+
+
 class _FakeScript:
     """Stands in for Home Assistant's Script: records what it was asked."""
 
@@ -2643,8 +2744,20 @@ class _FakeScript:
         self.runs: list[tuple[dict, object]] = []
         self.stopped = False
         targets = [step.get("target", {}) for step in sequence]
-        self.referenced_entities = {t["entity_id"] for t in targets if "entity_id" in t}
-        self.referenced_areas = {t["area_id"] for t in targets if "area_id" in t}
+
+        def ids(field):
+            return {
+                value
+                for target in targets
+                for value in (
+                    target.get(field, [])
+                    if isinstance(target.get(field, []), list)
+                    else [target[field]]
+                )
+            }
+
+        self.referenced_entities = ids("entity_id")
+        self.referenced_areas = ids("area_id")
         self.referenced_devices = self.referenced_floors = set()
         self.referenced_labels = set()
         _FakeScript.built.append(self)
@@ -2720,7 +2833,9 @@ def test_a_gesture_set_to_run_runs_its_sequence_with_the_gesture_in_it(
     _drain(binding)
 
     [script] = _FakeScript.built
-    assert script.sequence == _PLAY_PAUSE
+    from homeassistant.helpers import config_validation as cv
+
+    assert script.sequence == cv.SCRIPT_SCHEMA(_PLAY_PAUSE)
     [(variables, context)] = script.runs
     assert variables["gesture"] == gesture
     assert variables["channel"] == 1

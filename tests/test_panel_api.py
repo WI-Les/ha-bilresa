@@ -379,7 +379,46 @@ def test_commands_register_once(monkeypatch) -> None:
     async_register_commands(hass)
     async_register_commands(hass)
 
-    assert register.call_count == 8
+    assert register.call_count == 9
+
+
+async def test_binding_validation_neither_saves_nor_executes(monkeypatch):
+    import inspect
+    from unittest.mock import AsyncMock
+
+    from custom_components.ikea_bilresa.panel_api import ws_binding_validate
+
+    hass = _hass()
+    hass.services = SimpleNamespace(async_call=AsyncMock())
+    validate = AsyncMock()
+    monkeypatch.setattr(
+        "custom_components.ikea_bilresa.panel_api.async_validate_actions_config",
+        validate,
+    )
+    connection = _connection()
+    sequence = [{"action": "light.toggle", "target": {"entity_id": "light.test"}}]
+    await inspect.unwrap(ws_binding_validate)(
+        hass,
+        connection,
+        {
+            "id": 1,
+            "node_id": "101",
+            "channel": "1",
+            "data": {
+                "mode": "brightness",
+                "target": "light.test",
+                "click_action": "run",
+                "click_sequence": sequence,
+            },
+        },
+    )
+    from homeassistant.helpers import config_validation as cv
+
+    validate.assert_awaited_once_with(hass, cv.SCRIPT_SCHEMA(sequence))
+    hass.services.async_call.assert_not_called()
+    hass.config_entries.async_add_subentry.assert_not_called()
+    hass.config_entries.async_update_subentry.assert_not_called()
+    connection.send_result.assert_called_once_with(1, {"ok": True, "errors": {}})
 
 
 def test_write_surface_is_limited_to_binding_mutations_and_tests() -> None:
@@ -403,6 +442,7 @@ def test_write_surface_is_limited_to_binding_mutations_and_tests() -> None:
         "ws_binding_delete",
         "ws_binding_save",
         "ws_binding_test",
+        "ws_binding_validate",
         "ws_overview",
         "ws_overview_subscribe",
         "ws_settings_save",

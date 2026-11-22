@@ -36,7 +36,9 @@ from .const import (
     CONF_FOLLOWER_MIN,
     CONF_FOLLOWER_OFFSET,
     CONF_HOLD_ACTION,
+    CONF_HOLD_MAX_SECONDS,
     CONF_HOLD_SEQUENCE,
+    CONF_HOLD_STOP_ON_RELEASE,
     CONF_HOLD_TARGET,
     CONF_HOLD_TARGET_ACTION,
     CONF_MAX_BRIGHTNESS,
@@ -44,6 +46,7 @@ from .const import (
     CONF_MODE,
     CONF_NODE_ID,
     CONF_RAMP_DIRECTION,
+    CONF_RELEASE_SEQUENCE,
     CONF_SCENES,
     CONF_STEP,
     CONF_STEP_CURVE,
@@ -93,6 +96,7 @@ BINDING_OPTIONAL_FIELDS = (
     CONF_DOUBLE_SEQUENCE,
     CONF_TRIPLE_SEQUENCE,
     CONF_HOLD_SEQUENCE,
+    CONF_RELEASE_SEQUENCE,
 )
 
 # Each gesture that can run an action sequence, with the field that says what it
@@ -108,6 +112,10 @@ _SEQUENCE_GESTURES = (
 SEQUENCE_FIELDS = tuple(sequence for _action, sequence in _SEQUENCE_GESTURES)
 
 BINDING_EDIT_FIELDS = (
+    "gestures_enabled",
+    CONF_HOLD_STOP_ON_RELEASE,
+    CONF_HOLD_MAX_SECONDS,
+    CONF_RELEASE_SEQUENCE,
     CONF_TARGET,
     CONF_FOLLOWER,
     CONF_FOLLOWER_OFFSET,
@@ -137,6 +145,10 @@ BINDING_EDIT_FIELDS = (
 )
 
 BUTTON_BINDING_EDIT_FIELDS = (
+    "gestures_enabled",
+    CONF_HOLD_STOP_ON_RELEASE,
+    CONF_HOLD_MAX_SECONDS,
+    CONF_RELEASE_SEQUENCE,
     CONF_CLICK_ACTION,
     CONF_BUTTON_RESPONSE,
     CONF_CLICK_TARGET,
@@ -229,6 +241,12 @@ _WHEEL_SCHEMA = vol.Schema(
         ),
         vol.Optional(CONF_HOLD_TARGET): _ENTITY_ID,
         vol.Optional(CONF_HOLD_SEQUENCE): _sequence,
+        vol.Optional(CONF_RELEASE_SEQUENCE): _sequence,
+        vol.Required("gestures_enabled", default=True): cv.boolean,
+        vol.Required(CONF_HOLD_STOP_ON_RELEASE, default=False): cv.boolean,
+        vol.Required(CONF_HOLD_MAX_SECONDS, default=60): vol.All(
+            vol.Coerce(float), vol.Range(min=1, max=300)
+        ),
         vol.Required(CONF_HOLD_TARGET_ACTION, default=DEFAULT_TARGET_ACTION): vol.In(
             TARGET_ACTIONS
         ),
@@ -259,6 +277,12 @@ _BUTTON_SCHEMA = vol.Schema(
         ),
         vol.Optional(CONF_HOLD_TARGET): _ENTITY_ID,
         vol.Optional(CONF_HOLD_SEQUENCE): _sequence,
+        vol.Optional(CONF_RELEASE_SEQUENCE): _sequence,
+        vol.Required("gestures_enabled", default=True): cv.boolean,
+        vol.Required(CONF_HOLD_STOP_ON_RELEASE, default=False): cv.boolean,
+        vol.Required(CONF_HOLD_MAX_SECONDS, default=60): vol.All(
+            vol.Coerce(float), vol.Range(min=1, max=300)
+        ),
         vol.Required(CONF_HOLD_TARGET_ACTION, default=DEFAULT_TARGET_ACTION): vol.In(
             TARGET_ACTIONS
         ),

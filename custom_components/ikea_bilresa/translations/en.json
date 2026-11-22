@@ -2,7 +2,7 @@
   "config": {
     "step": {
       "user": {
-        "title": "IKEA BILRESA",
+        "title": "BILRESA.MasterControl",
         "description": "Connect to the Matter Server that already controls your BILRESA wheels. The URL is pre-filled from your Matter integration — leave it as is unless you run the Matter Server elsewhere.",
         "data": {
           "url": "Matter Server WebSocket URL"
@@ -63,7 +63,11 @@
             "step_curve": "Step placement",
             "follower_light": "Follower light (optional)",
             "follower_offset": "Follower offset (percentage points)",
-            "follower_min": "Follower minimum brightness (%)"
+            "follower_min": "Follower minimum brightness (%)",
+            "hold_stop_on_release": "Stop hold actions on release",
+            "hold_max_seconds": "Maximum hold duration (seconds)",
+            "release_sequence": "Actions after release",
+            "gestures_enabled": "Execute button actions (off: observe only)"
           },
           "data_description": {
             "button_response": "Instant runs on the initial press and requires multi-press and hold actions to be disabled. Fast release runs after the first short release. Multi-press aware waits for the completed gesture. Public BILRESA events remain fully classified in every mode.",
@@ -76,7 +80,11 @@
           "title": "Choose a wheel profile",
           "description": "Select starting defaults for this wheel channel. You can adjust every value on the next screen.",
           "data": {
-            "binding_profile": "Starting profile"
+            "binding_profile": "Starting profile",
+            "hold_stop_on_release": "Stop hold actions on release",
+            "hold_max_seconds": "Maximum hold duration (seconds)",
+            "release_sequence": "Actions after release",
+            "gestures_enabled": "Execute button actions (off: observe only)"
           }
         },
         "reconfigure": {
@@ -108,7 +116,11 @@
             "step_curve": "Step placement",
             "follower_light": "Follower light (optional)",
             "follower_offset": "Follower offset (percentage points)",
-            "follower_min": "Follower minimum brightness (%)"
+            "follower_min": "Follower minimum brightness (%)",
+            "hold_stop_on_release": "Stop hold actions on release",
+            "hold_max_seconds": "Maximum hold duration (seconds)",
+            "release_sequence": "Actions after release",
+            "gestures_enabled": "Execute button actions (off: observe only)"
           },
           "data_description": {
             "button_response": "Instant runs on the initial press and requires multi-press and hold actions to be disabled. Fast release runs after the first short release. Multi-press aware waits for the completed gesture. Public BILRESA events remain fully classified in every mode.",
@@ -214,7 +226,8 @@
         "cover_position": "Cover position",
         "temperature": "Climate target temperature",
         "fan_speed": "Fan speed",
-        "number": "Number value"
+        "number": "Number value",
+        "buttons": "Buttons only (scroll does nothing)"
       }
     },
     "hold_action": {
@@ -373,6 +386,18 @@
     "released": {
       "name": "BILRESA released after being held down",
       "description": "Triggers when a BILRESA button is released after being held down."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Shared control profile",
+        "description": "Channels on these remotes share their existing bindings. Editing one updates the matching channel on the other members. Leave the selection empty to unlink.",
+        "data": {
+          "profile_name": "Profile name",
+          "profile_members": "Linked remotes"
+        }
+      }
     }
   }
 }

@@ -49,6 +49,9 @@ const DEFAULT_BINDING = {
   click_action: "toggle",
   button_response: "multi_press",
   hold_action: "toggle",
+  hold_max_seconds: 60,
+  hold_stop_on_release: false,
+  gestures_enabled: true,
   scenes: [],
 };
 
@@ -56,6 +59,9 @@ const DEFAULT_BUTTON_BINDING = {
   click_action: "toggle",
   button_response: "multi_press",
   hold_action: "toggle",
+  hold_max_seconds: 60,
+  hold_stop_on_release: false,
+  gestures_enabled: true,
   ramp_direction: "alternate",
 };
 
@@ -63,6 +69,7 @@ const DEFAULT_BUTTON_BINDING = {
 // table it validates against. This copy only serves a backend older than that.
 const FALLBACK_SCHEMA = {
   binding_numbers: {
+    hold_max_seconds: { min: 1, max: 300, step: 1, unit: "s" },
     step: { min: 1, max: 25, step: 1, unit: "%" },
     acceleration: { min: 0, max: 100, step: 5, unit: "%" },
     min_brightness: { min: 0, max: 50, step: 1, unit: "%" },
@@ -3767,12 +3774,21 @@ class IkeaBilresaPanel extends HTMLElement {
       form.appendChild(message);
     }
 
+    if (channel.binding?.shared_profile) {
+      form.appendChild(el("p", "form-message", this._t("shared_profile_notice", {name: channel.binding.shared_profile})));
+    }
     // The gesture ledger above lists rotation, short, double, triple and hold
     // as one sequence. The editor follows that same order, and one grid row
     // carries one gesture: its action beside its target. Fields are grouped by
     // what they belong to, never by how advanced they are — a double press is
     // no more advanced than a short press.
     const sections = el("div", "form-sections");
+    sections.appendChild(this._selectField("gestures_enabled", this._t("gesture_activation"), [
+      {value: "true", label: this._t("gesture_active")},
+      {value: "false", label: this._t("gesture_shadow")},
+    ], {value: String(this._editorData.gestures_enabled ?? true), onChoose: (value) => {
+      this._editorData.gestures_enabled = value === "true";
+    }}));
     const pressDomains = this._schema().press_target_domains;
 
     if (!isButton) {
@@ -4089,6 +4105,17 @@ class IkeaBilresaPanel extends HTMLElement {
     const holdAction = this._editorData.hold_action;
     if (holdAction === "run") {
       hold.appendChild(this._actionsEditor("hold_sequence", "hold_action"));
+      hold.appendChild(this._selectField("hold_stop_on_release", this._t("hold_stop_on_release"), [
+        {value: "true", label: this._t("hold_stop_enabled")},
+        {value: "false", label: this._t("hold_stop_disabled")},
+      ], {value: String(this._editorData.hold_stop_on_release ?? false), onChoose: (value) => {
+        this._editorData.hold_stop_on_release = value === "true";
+      }}));
+      hold.appendChild(this._numberField("hold_max_seconds", this._t("hold_max_seconds")));
+      const release = el("div", "form-section");
+      release.appendChild(el("div", "form-section-title", this._t("release_actions")));
+      release.appendChild(this._actionsEditor("release_sequence", "release_sequence"));
+      hold.appendChild(release);
     } else if (holdAction !== "none" && (isButton || holdAction !== "ramp")) {
       hold.appendChild(
         this._entityField(

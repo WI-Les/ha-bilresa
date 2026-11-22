@@ -15,6 +15,7 @@ from homeassistant.config_entries import (
     ConfigFlow,
     ConfigFlowResult,
     ConfigSubentryFlow,
+    OptionsFlow,
     SubentryFlowResult,
 )
 from homeassistant.core import HomeAssistant, callback
@@ -48,6 +49,8 @@ from .const import (
     CONF_FOLLOWER_MIN,
     CONF_FOLLOWER_OFFSET,
     CONF_HOLD_ACTION,
+    CONF_HOLD_MAX_SECONDS,
+    CONF_HOLD_STOP_ON_RELEASE,
     CONF_HOLD_TARGET,
     CONF_HOLD_TARGET_ACTION,
     CONF_MAX_BRIGHTNESS,
@@ -55,6 +58,7 @@ from .const import (
     CONF_MODE,
     CONF_NODE_ID,
     CONF_RAMP_DIRECTION,
+    CONF_RELEASE_SEQUENCE,
     CONF_SCENES,
     CONF_STEP,
     CONF_STEP_CURVE,
@@ -99,6 +103,7 @@ from .groups import follower_overlaps
 from .matter_ws import MatterWSIncompatible, validate_server_info
 from .model import BilresaWheel
 from .presentation import generated_binding_title, generated_button_binding_title
+from .profiles import synchronize_profiles
 
 
 def _target_action_selector() -> selector.SelectSelector:
@@ -196,6 +201,11 @@ class BilresaConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
     VERSION = 1
     MINOR_VERSION = 2
 
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry):
+        return MasterControlOptionsFlow()
+
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -205,7 +215,9 @@ class BilresaConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         errors: dict[str, str] = {}
         if user_input is not None:
             if await _async_can_connect(self.hass, user_input[CONF_URL]):
-                return self.async_create_entry(title="IKEA BILRESA", data=user_input)
+                return self.async_create_entry(
+                    title="BILRESA.MasterControl", data=user_input
+                )
             errors["base"] = "cannot_connect"
 
         default_url = (user_input or {}).get(CONF_URL) or _matter_server_url(self.hass)
@@ -243,6 +255,56 @@ class BilresaConfigFlow(ConfigFlow, domain=DOMAIN):  # type: ignore[call-arg]
         config_entry,
     ) -> dict[str, type[ConfigSubentryFlow]]:
         return {SUBENTRY_BINDING: BindingSubentryFlowHandler}
+
+
+class MasterControlOptionsFlow(OptionsFlow):
+    """Link the existing channel bindings of several wheels into one profile."""
+
+    async def async_step_init(self, user_input=None):
+        if user_input is not None:
+            options = dict(self.config_entry.options)
+            nodes = user_input.get("profile_members", [])
+            options["shared_profiles"] = (
+                [{"name": user_input["profile_name"], "nodes": nodes}]
+                if len(nodes) > 1
+                else []
+            )
+            # Enabling a group is explicit: the first selected wheel supplies
+            # the initial settings for channels already bound on its peers.
+            self.hass.config_entries.async_update_entry(
+                self.config_entry, options=options
+            )
+            for subentry in tuple(self.config_entry.subentries.values()):
+                if str(subentry.data.get(CONF_NODE_ID)) == (
+                    nodes[0] if nodes else None
+                ):
+                    synchronize_profiles(
+                        self.hass, self.config_entry, data=dict(subentry.data)
+                    )
+            return self.async_create_entry(title="", data=options)
+        profiles = self.config_entry.options.get("shared_profiles", [])
+        current = profiles[0] if profiles else {}
+        coordinator = self.config_entry.runtime_data
+        choices = [
+            selector.SelectOptionDict(value=str(node), label=wheel.name)
+            for node, wheel in coordinator.wheels.items()
+            if wheel.variant == "wheel"
+        ]
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        "profile_name", default=current.get("name", "Shared profile")
+                    ): str,
+                    vol.Optional(
+                        "profile_members", default=current.get("nodes", [])
+                    ): selector.SelectSelector(
+                        selector.SelectSelectorConfig(options=choices, multiple=True)
+                    ),
+                }
+            ),
+        )
 
 
 class BindingSubentryFlowHandler(ConfigSubentryFlow):
@@ -348,6 +410,7 @@ class BindingSubentryFlowHandler(ConfigSubentryFlow):
         if normalized is not None and not errors:
             title = self._title(normalized)
             if step_id == "reconfigure":
+                synchronize_profiles(self.hass, self._get_entry(), data=normalized)
                 return self.async_update_and_abort(
                     self._get_entry(),
                     self._get_reconfigure_subentry(),
@@ -852,6 +915,38 @@ class BindingSubentryFlowHandler(ConfigSubentryFlow):
                     translation_key="ramp_direction",
                 )
             )
+        fields[
+            vol.Optional(
+                "gestures_enabled", default=defaults.get("gestures_enabled", True)
+            )
+        ] = selector.BooleanSelector()
+        fields[
+            vol.Optional(
+                CONF_HOLD_STOP_ON_RELEASE,
+                default=defaults.get(CONF_HOLD_STOP_ON_RELEASE, False),
+            )
+        ] = selector.BooleanSelector()
+        fields[
+            vol.Optional(
+                CONF_HOLD_MAX_SECONDS, default=defaults.get(CONF_HOLD_MAX_SECONDS, 60)
+            )
+        ] = selector.NumberSelector(
+            selector.NumberSelectorConfig(
+                min=1,
+                max=300,
+                step=1,
+                mode=selector.NumberSelectorMode.BOX,
+                unit_of_measurement="s",
+            )
+        )
+        fields[
+            vol.Optional(
+                CONF_RELEASE_SEQUENCE,
+                description={
+                    "suggested_value": defaults.get(CONF_RELEASE_SEQUENCE, [])
+                },
+            )
+        ] = selector.ActionSelector()
         return fields
 
     @callback

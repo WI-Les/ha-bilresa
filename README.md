@@ -1,3 +1,5 @@
+# BILRESA.MasterControl
+
 # ![BILRESA for Home Assistant with the scroll wheel and dual-button Matter remotes](docs/images/bilresa-remotes-banner.jpg)
 
 <!-- ha-marketplace:exclude-start -->
@@ -10,6 +12,13 @@ Choose what each turn or press does in the Home Assistant panel.
 - **[Quick Start](docs/QUICK-START.md)** — Install the integration and set up your first lamp.
 - **[Full Manual](docs/USER-GUIDE.md)** — Configure both remotes, explore examples and troubleshoot.
 
+## Central button and scroll control
+
+Version 0.2.0 adds bounded hold actions that stop on release, optional release
+sequences, observe-only button actions for migration, and linked profiles for
+existing channel bindings. Scroll settings and entity IDs are retained.
+See [MasterControl setup and rollback](docs/MASTERCONTROL.md).
+
 ## Get started
 
 You need **Home Assistant 2026.8 or newer**, its Matter integration and Matter
@@ -19,8 +28,8 @@ you also need a Thread border router.
 1. Check that your remote appears under **Settings → Devices & services → Matter**.
 2. On Home Assistant 2026.11 or newer, add BILRESA from **Settings → Marketplace**.
    On 2026.8–2026.10, use the [HACS steps](docs/INSTALLATION.md#hacs-on-older-home-assistant-versions).
-3. Follow the setup prompt or add **IKEA BILRESA** under **Settings → Devices &
-   services**. Restart if prompted, then open **IKEA BILRESA** in the sidebar.
+3. Follow the setup prompt or add **BILRESA.MasterControl** under **Settings → Devices &
+   services**. Restart if prompted, then open **BILRESA.MasterControl** in the sidebar.
 
 See the [installation guide](docs/INSTALLATION.md) for pre-releases, manual
 installation and migration from an existing setup.

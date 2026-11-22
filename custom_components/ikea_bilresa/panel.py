@@ -30,7 +30,7 @@ _LOGGER = logging.getLogger(__name__)
 
 PANEL_URL_PATH = "ikea-bilresa"
 PANEL_WEBCOMPONENT = "ikea-bilresa-panel"
-PANEL_TITLE = "IKEA BILRESA"
+PANEL_TITLE = "BILRESA.MasterControl"
 PANEL_ICON = "bilresa:scroll-wheel"
 
 STATIC_URL_PATH = "/ikea_bilresa_frontend"

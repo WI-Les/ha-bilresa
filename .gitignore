@@ -12,6 +12,8 @@ secrets.yaml
 __pycache__/
 *.py[cod]
 .venv/
+.tooling/
+.ruff_cache/
 node_modules/
 .pytest_cache/
 .coverage

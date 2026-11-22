@@ -34,6 +34,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import Context, HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -78,7 +79,9 @@ from .const import (
     CONF_FOLLOWER_MIN,
     CONF_FOLLOWER_OFFSET,
     CONF_HOLD_ACTION,
+    CONF_HOLD_MAX_SECONDS,
     CONF_HOLD_SEQUENCE,
+    CONF_HOLD_STOP_ON_RELEASE,
     CONF_HOLD_TARGET,
     CONF_HOLD_TARGET_ACTION,
     CONF_MAX_BRIGHTNESS,
@@ -86,6 +89,7 @@ from .const import (
     CONF_MODE,
     CONF_NODE_ID,
     CONF_RAMP_DIRECTION,
+    CONF_RELEASE_SEQUENCE,
     CONF_SCENES,
     CONF_STEP,
     CONF_STEP_CURVE,
@@ -146,6 +150,7 @@ from .engine import WheelAction
 from .gesture_actions import (
     GESTURE_DOUBLE_PRESS,
     GESTURE_HOLD,
+    GESTURE_RELEASE,
     GESTURE_SHORT_PRESS,
     GESTURE_TRIPLE_PRESS,
     action_is_supported,
@@ -394,6 +399,15 @@ class LightBinding:
             if data.get(field)
         }
         self._scripts: dict[str, Script] = {}
+        self._gestures_enabled = data.get("gestures_enabled", True)
+        self._hold_stop_on_release = data.get(CONF_HOLD_STOP_ON_RELEASE, False)
+        self._hold_max_seconds = float(data.get(CONF_HOLD_MAX_SECONDS, 60))
+        self._hold_active = False
+        self._hold_origin: WheelAction | None = None
+        self._hold_epoch = 0
+        self._hold_watchdog_unsub: Callable[[], None] | None = None
+        if data.get(CONF_RELEASE_SEQUENCE):
+            self._sequences[GESTURE_RELEASE] = list(data[CONF_RELEASE_SEQUENCE])
         # Two quick first presses must share one script, or their runs would not
         # queue behind each other; the lock makes the second wait for the first.
         self._build_lock = asyncio.Lock()
@@ -569,6 +583,7 @@ class LightBinding:
 
         @callback
         def unsubscribe() -> None:
+            self._stop_hold_sequence()
             self._stop_ramp(change_direction=False)
             self._stop_sequences()
             self._cancel_pending_command()
@@ -596,6 +611,13 @@ class LightBinding:
 
     @callback
     def _handle_action(self, action: WheelAction) -> None:
+        if not self._gestures_enabled and action.type != ACTION_ROTATE:
+            self._report_activity("skipped", reason="shadow_gesture", action=action)
+            return
+        if self._hold_active and action.type in (ACTION_PRESS, ACTION_ROTATE):
+            self._stop_hold_sequence()
+        if action.type == ACTION_HOLD and self._hold_active:
+            return
         previous_action = self._active_action
         self._active_action = action
         try:
@@ -636,6 +658,10 @@ class LightBinding:
                 else:
                     self._report_activity("skipped", reason="unsupported_press_count")
             elif action.type == ACTION_HOLD:
+                if self._hold_active:
+                    return
+                self._hold_active = True
+                self._hold_origin = action
                 self._hold_off_rotation()
                 if self._hold_action == HOLD_RAMP:
                     self._start_ramp()
@@ -644,14 +670,28 @@ class LightBinding:
                         GESTURE_HOLD, self._hold_target, self._hold_target_action
                     )
                 elif self._hold_action == HOLD_RUN:
+                    self._stop_hold_sequence()
+                    self._hold_active = True
+                    self._hold_origin = action
+                    self._hold_epoch += 1
+                    self._hold_watchdog_unsub = async_call_later(
+                        self.hass, self._hold_max_seconds, self._hold_watchdog
+                    )
                     self._run_sequence(GESTURE_HOLD)
                 else:
                     self._report_activity("skipped", reason="hold_not_configured")
-            elif action.type == ACTION_RELEASE and self._hold_action == HOLD_RAMP:
-                self._stop_ramp(change_direction=True)
-                self._report_activity(
-                    "completed", result={"kind": "hold", "action": "ramp_stopped"}
-                )
+            elif action.type == ACTION_RELEASE:
+                held = self._hold_active
+                self._hold_active = False
+                if self._hold_action == HOLD_RAMP:
+                    self._stop_ramp(change_direction=True)
+                    self._report_activity(
+                        "completed", result={"kind": "hold", "action": "ramp_stopped"}
+                    )
+                if self._hold_stop_on_release:
+                    self._stop_hold_sequence()
+                if held and GESTURE_RELEASE in self._sequences:
+                    self._run_sequence(GESTURE_RELEASE)
             else:
                 self._report_activity("skipped", reason="gesture_not_configured")
         finally:
@@ -660,6 +700,7 @@ class LightBinding:
     @callback
     def _handle_connection_change(self) -> None:
         """Stop safety-critical timers whenever Matter connectivity changes."""
+        self._stop_hold_sequence()
         self._fast_press_started = None
         self._reset_latency_trace()
         self._forget_target("matter_connection_change")
@@ -992,6 +1033,8 @@ class LightBinding:
         self, role: str, event_type: str, endpoint_id: int | None = None
     ) -> None:
         """Track private gesture boundaries and forward button hints."""
+        if role == ROLE_BUTTON and not self._gestures_enabled:
+            return
         if self._endpoint_id is not None and endpoint_id != self._endpoint_id:
             return
         if self._trace.enabled:
@@ -1224,6 +1267,9 @@ class LightBinding:
 
     @callback
     def _rotate(self, action: WheelAction) -> None:
+        if self._mode == "buttons":
+            self._report_activity("skipped", reason="scroll_not_configured")
+            return
         # The arriving action, before any filter. A capture that only records
         # applied steps cannot show a notch the binding dropped on the way in,
         # which is exactly the kind of loss worth finding.
@@ -2083,7 +2129,12 @@ class LightBinding:
         self._report_activity("pending", result=result, action=action)
         self.hass.async_create_task(
             self._async_run_sequence(
-                gesture, sequence, self._script_variables(gesture), result, action
+                gesture,
+                sequence,
+                self._script_variables(gesture),
+                result,
+                action,
+                self._hold_epoch if gesture == GESTURE_HOLD else None,
             )
         )
 
@@ -2094,6 +2145,7 @@ class LightBinding:
         variables: dict[str, Any],
         result: dict[str, Any],
         action: WheelAction | None,
+        hold_epoch: int | None = None,
     ) -> None:
         """Build the script on first use and start a run of it.
 
@@ -2110,7 +2162,7 @@ class LightBinding:
                 if script is None:
                     try:
                         validated = await async_validate_actions_config(
-                            self.hass, sequence
+                            self.hass, cv.SCRIPT_SCHEMA(sequence)
                         )
                         script = Script(
                             self.hass,
@@ -2134,15 +2186,56 @@ class LightBinding:
                             action=action,
                         )
                         return
+                    if hold_epoch is not None and hold_epoch != self._hold_epoch:
+                        return
                     self._scripts[gesture] = script
         if self._closed:
             # Unloaded while the script was being built: nothing may start now.
             return
+        if hold_epoch is not None and hold_epoch != self._hold_epoch:
+            return
         self._signal_targets_commanded(self._sequence_entities(script), None, None)
-        self.hass.async_create_task(
-            script.async_run(run_variables=variables, context=Context())
-        )
+        if hold_epoch is None:
+            self.hass.async_create_task(
+                script.async_run(run_variables=variables, context=Context())
+            )
+        else:
+            self.hass.async_create_task(
+                self._async_run_hold(script, variables, hold_epoch)
+            )
         self._report_activity("accepted", result=result, action=action)
+
+    async def _async_run_hold(
+        self, script: Script, variables: dict[str, Any], epoch: int
+    ) -> None:
+        """Do not start a hold that was released while its actions were built."""
+        if self._closed or epoch != self._hold_epoch:
+            return
+        try:
+            await script.async_run(run_variables=variables, context=Context())
+        except HomeAssistantError:
+            _LOGGER.exception("BILRESA hold actions failed")
+            self._report_activity("failed", reason="hold_actions_failed")
+
+    @callback
+    def _hold_watchdog(self, _now) -> None:
+        self._hold_watchdog_unsub = None
+        origin = self._hold_origin
+        self._stop_hold_sequence()
+        self._report_activity("completed", reason="hold_timeout", action=origin)
+
+    @callback
+    def _stop_hold_sequence(self) -> None:
+        """Stop this physical binding's hold, including a not-yet-built run."""
+        self._hold_active = False
+        self._hold_origin = None
+        self._hold_epoch += 1
+        if self._hold_watchdog_unsub is not None:
+            self._hold_watchdog_unsub()
+            self._hold_watchdog_unsub = None
+        # A new hold gets a new Script. A delayed stop cannot stop its successor.
+        if script := self._scripts.pop(GESTURE_HOLD, None):
+            self.hass.async_create_task(script.async_stop())
 
     def _sequence_entities(self, script: Script) -> set[str]:
         """The entities a run of actions names, and those of its areas,

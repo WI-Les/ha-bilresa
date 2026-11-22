@@ -195,6 +195,9 @@ CONF_CLICK_SEQUENCE = "click_sequence"
 CONF_DOUBLE_SEQUENCE = "double_press_sequence"
 CONF_TRIPLE_SEQUENCE = "triple_press_sequence"
 CONF_HOLD_SEQUENCE = "hold_sequence"
+CONF_HOLD_STOP_ON_RELEASE = "hold_stop_on_release"
+CONF_HOLD_MAX_SECONDS = "hold_max_seconds"
+CONF_RELEASE_SEQUENCE = "release_sequence"
 CONF_RAMP_DIRECTION = "ramp_direction"
 CONF_SCENES = "scenes"
 
@@ -275,7 +278,9 @@ MODE_COVER = "cover_position"
 MODE_TEMPERATURE = "temperature"
 MODE_FAN = "fan_speed"
 MODE_NUMBER = "number"
+MODE_BUTTONS = "buttons"
 MODES = [
+    MODE_BUTTONS,
     MODE_BRIGHTNESS,
     MODE_COLOR_TEMP,
     MODE_COLOR,
@@ -288,6 +293,7 @@ MODES = [
 DEFAULT_MODE = MODE_BRIGHTNESS
 
 MODE_TARGET_DOMAINS = {
+    MODE_BUTTONS: frozenset(_GESTURE_TARGET_DOMAINS),
     MODE_BRIGHTNESS: frozenset({"light"}),
     MODE_COLOR_TEMP: frozenset({"light"}),
     MODE_COLOR: frozenset({"light"}),
