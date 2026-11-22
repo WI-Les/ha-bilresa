@@ -31,6 +31,7 @@ from typing import Any
 from homeassistant.components import websocket_api
 from homeassistant.config_entries import ConfigSubentry
 from homeassistant.core import Event, HomeAssistant, callback
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -116,7 +117,9 @@ async def ws_binding_validate(hass, connection, msg):
         ):
             if data.get(field):
                 try:
-                    await async_validate_actions_config(hass, data[field])
+                    await async_validate_actions_config(
+                        hass, cv.SCRIPT_SCHEMA(data[field])
+                    )
                 # Validation errors from optional integrations are surfaced too.
                 except Exception as err:  # noqa: BLE001
                     errors[field] = str(err)

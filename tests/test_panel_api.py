@@ -412,7 +412,9 @@ async def test_binding_validation_neither_saves_nor_executes(monkeypatch):
             },
         },
     )
-    validate.assert_awaited_once_with(hass, sequence)
+    from homeassistant.helpers import config_validation as cv
+
+    validate.assert_awaited_once_with(hass, cv.SCRIPT_SCHEMA(sequence))
     hass.services.async_call.assert_not_called()
     hass.config_entries.async_add_subentry.assert_not_called()
     hass.config_entries.async_update_subentry.assert_not_called()

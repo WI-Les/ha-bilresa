@@ -34,6 +34,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import Context, HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers.dispatcher import (
     async_dispatcher_connect,
     async_dispatcher_send,
@@ -2161,7 +2162,7 @@ class LightBinding:
                 if script is None:
                     try:
                         validated = await async_validate_actions_config(
-                            self.hass, sequence
+                            self.hass, cv.SCRIPT_SCHEMA(sequence)
                         )
                         script = Script(
                             self.hass,

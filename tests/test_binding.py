@@ -2744,8 +2744,20 @@ class _FakeScript:
         self.runs: list[tuple[dict, object]] = []
         self.stopped = False
         targets = [step.get("target", {}) for step in sequence]
-        self.referenced_entities = {t["entity_id"] for t in targets if "entity_id" in t}
-        self.referenced_areas = {t["area_id"] for t in targets if "area_id" in t}
+
+        def ids(field):
+            return {
+                value
+                for target in targets
+                for value in (
+                    target.get(field, [])
+                    if isinstance(target.get(field, []), list)
+                    else [target[field]]
+                )
+            }
+
+        self.referenced_entities = ids("entity_id")
+        self.referenced_areas = ids("area_id")
         self.referenced_devices = self.referenced_floors = set()
         self.referenced_labels = set()
         _FakeScript.built.append(self)
@@ -2821,7 +2833,9 @@ def test_a_gesture_set_to_run_runs_its_sequence_with_the_gesture_in_it(
     _drain(binding)
 
     [script] = _FakeScript.built
-    assert script.sequence == _PLAY_PAUSE
+    from homeassistant.helpers import config_validation as cv
+
+    assert script.sequence == cv.SCRIPT_SCHEMA(_PLAY_PAUSE)
     [(variables, context)] = script.runs
     assert variables["gesture"] == gesture
     assert variables["channel"] == 1
