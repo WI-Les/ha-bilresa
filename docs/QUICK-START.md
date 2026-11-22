@@ -1,6 +1,6 @@
 # Quick Start — BILRESA.MasterControl
 
-This guide covers **0.2.0-rc.3**. Start with one remote and one light, then add the other gestures. Screenshots show the shipped panel with synthetic examples; Home Assistant's native selectors and action editor can look different. [About the screenshots](SCREENSHOTS.md).
+This guide covers **0.2.0**. Start with one remote and one light, then add the other gestures. Screenshots show the shipped panel with synthetic examples; Home Assistant's native selectors and action editor can look different. [About the screenshots](SCREENSHOTS.md).
 
 ## 1. Prepare
 
@@ -10,7 +10,7 @@ Back up the existing integration and its configuration before upgrading. Keep ol
 
 ## 2. Install BILRESA.MasterControl
 
-Use [Marketplace, HACS or manual installation](INSTALLATION.md). Enable **Include pre-releases** and select **0.2.0-rc.3** for this interface. Stable 0.1.0 has the older interface. A source snapshot of `main` can differ from a published release.
+Use [Marketplace, HACS or manual installation](INSTALLATION.md) and select stable **0.2.0**. Pre-releases do not need to be enabled. Version 0.1.0 has the older interface. A source snapshot of `main` can differ from a published release.
 
 Restart Home Assistant. For a new installation, choose **Settings → Devices & services → Add integration → BILRESA.MasterControl** and follow the connection flow. Existing `ikea_bilresa` installations retain their config entry and entities; do not add a second copy or re-pair the remote.
 

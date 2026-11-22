@@ -1,8 +1,8 @@
 # Installation and migration
 
-Current release candidate: [**BILRESA.MasterControl 0.2.0-rc.3**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.2.0-rc.3).
-Enable **Include pre-releases** in Marketplace/HACS and select this version.
-Stable 0.1.0 uses the older IKEA BILRESA name and lacks the new MasterControl
+Current stable release: [**BILRESA.MasterControl 0.2.0**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.2.0).
+Select this version in the normal Marketplace/HACS release channel. Enabling
+pre-releases is not required. Version 0.1.0 uses the older IKEA BILRESA name and lacks the new MasterControl
 hold lifecycle and shared profiles. A commit on `main` is not automatically a
 release; use the release archive for a reproducible manual installation.
 
@@ -26,8 +26,7 @@ administrator and review the first-run notice.
    You can also open **Settings → Marketplace → Add from link** and enter
    `https://github.com/WI-Les/ha-bilresa`. Choose **Integration** if asked for
    the type. Connect GitHub when prompted to add the custom repository.
-2. On the BILRESA repository page, select **Install** and confirm the intended
-   version. For a published candidate, include pre-releases as described below.
+2. On the BILRESA repository page, select **Install** and confirm stable **0.2.0**.
 3. Restart if prompted. If the setup form does not open automatically, go to
    **Settings → Devices & services → Add integration**, select **BILRESA.MasterControl**
    and follow the Matter Server setup.
@@ -38,6 +37,8 @@ The [Quick Start](QUICK-START.md#2-install-bilresamastercontrol) walks through
 installation and the first channel using current panel screenshots.
 
 ### Install a release candidate
+
+This is optional for testing future candidates; stable 0.2.0 does not need it.
 
 Open the BILRESA repository page in Marketplace. Select **Include
 pre-releases** from the three-dot menu, then select **Include**. Open
@@ -58,9 +59,9 @@ Server setup.
 
 ## Manual installation
 
-Download the source archive for the intended release, or the current
-[main source archive](https://github.com/WI-Les/ha-bilresa/archive/refs/heads/main.zip)
-for the documented candidate. Record the selected version/commit. Copy the complete
+Download the [0.2.0 source archive](https://github.com/WI-Les/ha-bilresa/archive/refs/tags/v0.2.0.zip)
+or the source archive for another intended release. Record the selected
+version/commit. Copy the complete
 `custom_components/ikea_bilresa` directory, including `brand`, into your Home
 Assistant configuration directory under `custom_components`. Restart Home
 Assistant and add the integration as described above. Do not copy files from
