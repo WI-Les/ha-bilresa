@@ -1,6 +1,6 @@
 # BILRESA.MasterControl manual
 
-For **0.2.0-rc.3**. The integration's display name is BILRESA.MasterControl; its technical domain and component folder remain `ikea_bilresa`.
+For **0.2.0**. The integration's display name is BILRESA.MasterControl; its technical domain and component folder remain `ikea_bilresa`.
 
 [Quick Start](QUICK-START.md) · [Installation](INSTALLATION.md) · [Migration and recovery](MASTERCONTROL.md)
 
@@ -262,7 +262,7 @@ Retain the config entry, Matter pairing and entity IDs when upgrading the same d
 | Follower stays off | Intentional while off; also check overlap and primary errors |
 | Volume skips | Target must report a valid current volume |
 | Linked remote does not update | Matching existing channel binding, selected profile members and successful save |
-| Panel looks old | Installed manifest version, restart and frontend reload; check the candidate actually installed |
+| Panel looks old | Installed manifest version, restart and frontend reload; check the version actually installed |
 | Action editor unavailable | Built-in list/JSON fallback retains the same sequence |
 
 Keep diagnosis scoped to the affected remote and target. [Hardware validation](HARDWARE-VALIDATION.md) lists the physical checks automated tests cannot replace.

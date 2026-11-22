@@ -1,6 +1,6 @@
 # BILRESA.MasterControl
 
-For 0.2.0-rc.3. See the illustrated [Quick Start](QUICK-START.md) and
+For 0.2.0. See the illustrated [Quick Start](QUICK-START.md) and
 [full manual](USER-GUIDE.md) for everyday configuration.
 
 MasterControl keeps real-time scrolling and single, double, triple, hold and

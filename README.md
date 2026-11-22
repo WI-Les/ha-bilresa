@@ -1,6 +1,6 @@
 # BILRESA.MasterControl
 
-![BILRESA for Home Assistant with the scroll wheel and dual-button Matter remotes](docs/images/bilresa-remotes-banner.jpg)
+![BILRESA.MasterControl for Home Assistant with the scroll wheel and dual-button Matter remotes](docs/images/bilresa-mastercontrol-banner.png)
 
 <!-- ha-marketplace:exclude-start -->
 [![Open in Marketplace on My Home Assistant](https://my.home-assistant.io/badges/marketplace_repository.svg)](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration)
@@ -8,7 +8,9 @@
 
 Real-time scrolling, single/double/triple presses, hold and release in one Home Assistant integration for IKEA BILRESA Matter remotes.
 
-[Quick Start](docs/QUICK-START.md) · [Full manual](docs/USER-GUIDE.md) · [Installation and rollback](docs/INSTALLATION.md) · [Changelog](CHANGELOG.md)
+[![Quick Start](docs/images/buttons/quick-start.svg)](docs/QUICK-START.md)
+[![Full Manual](docs/images/buttons/full-manual.svg)](docs/USER-GUIDE.md)
+[![Installation Guide](docs/images/buttons/installation-guide.svg)](docs/INSTALLATION.md)
 
 ![MasterControl overview with two wheel remotes and a dual-button remote](docs/images/mastercontrol/01-overview.jpg)
 
@@ -27,11 +29,11 @@ Targets can use any supported Home Assistant integration; they do not need to be
 
 ## Version and installation
 
-The current MasterControl release candidate is [**0.2.0-rc.3**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.2.0-rc.3). Enable **Include pre-releases** in Marketplace/HACS and select that version. Stable **0.1.0** predates MasterControl's shared profiles and bounded hold actions.
+The current stable release is [**BILRESA.MasterControl 0.2.0**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.2.0). Install it through the normal Marketplace/HACS release channel; enabling pre-releases is not required.
 
-- Home Assistant **2026.11+**: [Open in Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration), enable pre-releases and choose **0.2.0-rc.3**.
+- Home Assistant **2026.11+**: [Open in Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration) and select **0.2.0**.
 - Home Assistant **2026.8–2026.10**: [Open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=WI-Les&repository=ha-bilresa&category=integration).
-- For the current source candidate: follow [manual installation](docs/INSTALLATION.md#manual-installation).
+- For a manual installation: follow the [installation guide](docs/INSTALLATION.md#manual-installation).
 
 The integration name and sidebar are **BILRESA.MasterControl**. Its folder and domain remain `ikea_bilresa`; upgrading an existing installation does not require re-pairing devices or changing entity IDs. Install only one implementation of this domain.
 

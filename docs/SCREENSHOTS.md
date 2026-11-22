@@ -2,6 +2,10 @@
 
 Captured on **22 November 2026** from the **0.2.0-rc.3** frontend in this repository.
 
+Stable **0.2.0** uses the same panel frontend, so these screenshots also describe
+the stable release. The stable promotion updates version metadata and README
+branding/navigation; it does not change the panel controls.
+
 These are browser screenshots of the shipped panel, using synthetic devices and bindings. They are not screenshots of a household installation and do not prove physical operation. The preview banner identifies the demo. Views scrolled into an editor section may not include that banner.
 
 ## Reproduce

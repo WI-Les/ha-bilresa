@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.0 — BILRESA.MasterControl
+
+- Publish MasterControl through the stable release channel, retaining the
+  integration runtime from 0.2.0-rc.3.
+- Rename the banner to BILRESA.MasterControl while preserving its visual style.
+- Add clickable Quick Start, Full Manual and Installation Guide buttons and
+  remove Changelog from the README's primary navigation.
+- Update installation and user documentation for the stable release.
+- Retain all existing pairings, bindings, entity IDs and rollback paths.
+
+Physical acceptance of all MasterControl gestures remains pending; automated
+software checks and synthetic screenshots do not establish physical behaviour.
+
 ## 0.2.0-rc.3
 
 - Restore the original README banner and official Open in Marketplace badge.
