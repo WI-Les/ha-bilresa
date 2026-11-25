@@ -55,7 +55,7 @@ Voor dimmen bij vasthouden: kies een lamp als doel, **Altijd lichter** voor de e
 
 ## 7. Extra knopacties toevoegen
 
-Behoud voor het draaiwiel **Reactie → Wachten op enkel/dubbel/driemaal drukken** (*Response → Wait for single/double/triple press*). Bij het tweeknopsmodel heet dit **Wachten op enkel of dubbel drukken**.
+Behoud voor het draaiwiel **Reactie → Enkel/dubbel/driemaal herkennen** (*Response → Wait for single/double/triple press*). Bij het tweeknopsmodel heet dit **Enkel of dubbel herkennen**.
 
 - Stel dubbel drukken bijvoorbeeld in op **Acties uitvoeren** en activeer een fictieve avondscène.
 - Alleen bij het draaiwiel: stel driemaal drukken bijvoorbeeld in op **Doel uitschakelen**.

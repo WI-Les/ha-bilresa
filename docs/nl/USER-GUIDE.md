@@ -94,8 +94,8 @@ Kort drukken kan **Hetzelfde doel als bij draaien** gebruiken. Dubbel drukken, d
 
 | Reactie (*Response*) | Gedrag |
 | --- | --- |
-| Wachten op enkel/dubbel/driemaal drukken | Herkent het voltooide aantal drukken; behoud dit bij gecombineerde bedieningen |
-| Uitvoeren na de eerste keer kort loslaten | Snellere enkele druk; dubbel en driemaal drukken zijn niet beschikbaar |
+| Enkel/dubbel/driemaal herkennen | Herkent het voltooide aantal drukken; behoud dit bij gecombineerde bedieningen |
+| Uitvoeren na kort loslaten | Snellere enkele druk; dubbel en driemaal drukken zijn niet beschikbaar |
 | Uitvoeren zodra u drukt | Vroegste reactie; dubbel/driemaal drukken en aparte vasthoudacties zijn niet beschikbaar |
 
 Het tweeknopsmodel biedt de wachtkeuze voor **enkel of dubbel** drukken. Sneller reageren kan niet tegelijk wachten om te weten of dezelfde druk nog een dubbele druk of vasthouden wordt. De openbare gebeurtenissen blijven in elke reactiemodus volledig onderscheiden.
