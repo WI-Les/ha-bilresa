@@ -8,9 +8,35 @@ ROOT = Path(__file__).resolve().parent.parent
 
 
 def test_manifest_version_is_valid() -> None:
-    manifest = json.loads((ROOT / "custom_components/ikea_bilresa/manifest.json").read_text(encoding="utf-8"))
+    manifest = json.loads(
+        (ROOT / "custom_components/ikea_bilresa/manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
     assert re.fullmatch(r"\d+\.\d+\.\d+(?:-rc\.\d+)?", manifest["version"])
     assert manifest["domain"] == "ikea_bilresa"
+
+
+def test_current_user_guides_match_manifest_version() -> None:
+    manifest = json.loads(
+        (ROOT / "custom_components/ikea_bilresa/manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    version = manifest["version"]
+    for name in (
+        "README.md",
+        "README.nl.md",
+        "docs/QUICK-START.md",
+        "docs/INSTALLATION.md",
+        "docs/USER-GUIDE.md",
+        "docs/nl/QUICK-START.md",
+        "docs/nl/INSTALLATION.md",
+        "docs/nl/USER-GUIDE.md",
+        "docs/RELEASE-0.2.1.md",
+        "docs/nl/RELEASE-0.2.1.md",
+    ):
+        assert version in (ROOT / name).read_text(encoding="utf-8"), name
 
 
 def test_development_status_records_upstream_source() -> None:

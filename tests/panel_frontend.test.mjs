@@ -1236,6 +1236,30 @@ test("a backend from before 0.6.1 still works: one label set", () => {
   assert.equal(panel._t("add_binding"), "Přidat propojení");
 });
 
+for (const language of ["nl", "nl-NL", "nl-BE"]) {
+  test(`Dutch profile ${language} selects Dutch labels and requests Dutch snapshots`, async () => {
+    const panel = newPanel();
+    const calls = [];
+    panel._panel = { config: { language: "en", labels_by_language: {
+      en: { tab_live: "Live test" }, nl: { tab_live: "Live testen" },
+    } } };
+    panel._hass = {
+      language,
+      callWS: async (message) => { calls.push(message); return { wheels: [] }; },
+      connection: { subscribeMessage: async (_callback, message) => {
+        calls.push(message); return () => {};
+      } },
+    };
+    assert.equal(panel._lang(), "nl");
+    assert.equal(panel._t("tab_live"), "Live testen");
+    panel._view = "channels";
+    await panel._connect();
+    assert.ok(calls.length >= 2);
+    assert.ok(calls.every((message) => message.language === "nl"));
+    panel.disconnectedCallback();
+  });
+}
+
 test("the snapshot is requested in the user's language", async () => {
   const panel = newPanel();
   const calls = [];

@@ -1,0 +1,403 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "BILRESA.MasterControl",
+        "description": "Verbind met de Matter Server die uw BILRESA-draaiwielen al bedient. Het adres is overgenomen uit uw Matter-integratie. Laat het staan, tenzij uw Matter Server ergens anders draait.",
+        "data": {
+          "url": "WebSocket-adres van Matter Server"
+        }
+      },
+      "reconfigure": {
+        "title": "Matter Server-verbinding wijzigen",
+        "description": "Wijzig het WebSocket-adres van Matter Server. Het nieuwe adres wordt getest voordat de integratie opnieuw verbinding maakt.",
+        "data": {
+          "url": "WebSocket-adres van Matter Server"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Verbinding met Matter Server mislukt. Controleer het adres en of de Matter Server-app (add-on) draait."
+    },
+    "abort": {
+      "already_configured": "IKEA BILRESA is al ingesteld."
+    }
+  },
+  "config_subentries": {
+    "binding": {
+      "title": "Bedieningskoppeling",
+      "initiate_flow": {
+        "user": "Bedieningskoppeling toevoegen",
+        "reconfigure": "Bedieningskoppeling opnieuw instellen"
+      },
+      "entry_type": "bedieningskoppeling",
+      "step": {
+        "user": {
+          "title": "BILRESA-bediening instellen",
+          "description": "Kies een BILRESA-apparaat of kopieer een bestaande bedieningskoppeling. Draaiwielkanalen tonen draai- en knopacties. De tweeknopsafstandsbediening toont alleen acties die de hardware ondersteunt.",
+          "data": {
+            "binding_profile": "Beginprofiel",
+            "copy_from": "Instellingen van een bestaande bedieningskoppeling kopiëren (optioneel)",
+            "node_id": "BILRESA-apparaat",
+            "channel": "Kanaal",
+            "endpoint": "Knop",
+            "target": "Doel (bijvoorbeeld lampen, een luidspreker, afdekking, thermostaat, ventilator of getalwaarde)",
+            "mode": "Draaien bedient",
+            "step": "Wijziging per draaistap (% van bereik)",
+            "acceleration": "Versnelling (sneller draaien = grotere stappen)",
+            "min_brightness": "Minimale helderheid (%, 0 = draaien kan uitschakelen)",
+            "max_brightness": "Maximale helderheid (%)",
+            "transition": "Grote sprongen vloeiend verdelen (s)",
+            "click_action": "Actie bij enkel drukken (leeg: aan/uit schakelen, of script/scène uitvoeren)",
+            "button_response": "Knopreactie",
+            "click_target": "Doel bij enkel drukken",
+            "double_press_target": "Doel bij dubbel drukken (optioneel)",
+            "double_press_action": "Actie bij dubbel drukken (leeg: aan/uit schakelen, of script/scène uitvoeren)",
+            "triple_press_target": "Doel bij driemaal drukken (optioneel)",
+            "triple_press_action": "Actie bij driemaal drukken (leeg: aan/uit schakelen, of script/scène uitvoeren)",
+            "hold_target": "Doel bij vasthouden",
+            "hold_target_action": "Actie op doel bij vasthouden (leeg: aan/uit schakelen, of script/scène uitvoeren)",
+            "hold_action": "Knopactie bij vasthouden",
+            "ramp_direction": "Dimrichting bij vasthouden",
+            "scenes": "Scènes doorlopen bij enkel drukken (optioneel, vervangt de knopactie)",
+            "step_curve": "Verdeling van draaistappen",
+            "follower_light": "Meedimmende lamp (optioneel)",
+            "follower_offset": "Helderheidsverschil van meedimmende lamp (procentpunten)",
+            "follower_min": "Minimale helderheid van meedimmende lamp (%)",
+            "hold_stop_on_release": "Acties bij vasthouden stoppen na loslaten",
+            "hold_max_seconds": "Maximale duur van vasthouden (seconden)",
+            "release_sequence": "Acties na loslaten",
+            "gestures_enabled": "Knopacties uitvoeren (uit: alleen volgen)"
+          },
+          "data_description": {
+            "button_response": "Meteen reageren voert de actie bij de eerste druk uit. Acties voor meerdere drukken en vasthouden moeten dan uit staan. Reageren na kort loslaten voert de actie na het eerste korte loslaten uit. Herkenning van meerdere drukken wacht op de voltooide bediening. De openbare BILRESA-gebeurtenissen blijven in elke modus volledig onderscheiden.",
+            "transition": "Snel draaien bereikt Home Assistant als groepen draaistappen. Eén draaistap wordt altijd meteen verwerkt. Een grotere groep wordt naar verhouding over maximaal deze tijd verdeeld. 0 schakelt het vloeiend verdelen uit.",
+            "step_curve": "Springt de helderheid bij snel draaien, vooral bij lage waarden? Kies dan Gelijkmatig voor het oog en probeer opnieuw. Laat dit op Lineair staan als de lamp het dimmen zelf al gelijkmatig verdeelt. Dubbel corrigeren geeft een minder goed resultaat.",
+            "follower_light": "De meedimmende lamp wordt alleen aangepast als ze al aan is."
+          }
+        },
+        "profile": {
+          "title": "Draaiwielprofiel kiezen",
+          "description": "Kies de begininstellingen voor dit draaiwielkanaal. U kunt alle waarden op het volgende scherm aanpassen.",
+          "data": {
+            "binding_profile": "Beginprofiel",
+            "hold_stop_on_release": "Acties bij vasthouden stoppen na loslaten",
+            "hold_max_seconds": "Maximale duur van vasthouden (seconden)",
+            "release_sequence": "Acties na loslaten",
+            "gestures_enabled": "Knopacties uitvoeren (uit: alleen volgen)"
+          }
+        },
+        "reconfigure": {
+          "title": "Bedieningskoppeling opnieuw instellen",
+          "description": "Pas dit draaiwielkanaal of deze knop aan. Alleen opties die de gekozen hardware ondersteunt worden getoond.",
+          "data": {
+            "node_id": "BILRESA-apparaat",
+            "channel": "Kanaal",
+            "endpoint": "Knop",
+            "target": "Doel (bijvoorbeeld lampen, een luidspreker, afdekking, thermostaat, ventilator of getalwaarde)",
+            "mode": "Draaien bedient",
+            "step": "Wijziging per draaistap (% van bereik)",
+            "acceleration": "Versnelling (sneller draaien = grotere stappen)",
+            "min_brightness": "Minimale helderheid (%, 0 = draaien kan uitschakelen)",
+            "max_brightness": "Maximale helderheid (%)",
+            "transition": "Grote sprongen vloeiend verdelen (s)",
+            "click_action": "Actie bij enkel drukken (leeg: aan/uit schakelen, of script/scène uitvoeren)",
+            "button_response": "Knopreactie",
+            "click_target": "Doel bij enkel drukken",
+            "double_press_target": "Doel bij dubbel drukken (optioneel)",
+            "double_press_action": "Actie bij dubbel drukken (leeg: aan/uit schakelen, of script/scène uitvoeren)",
+            "triple_press_target": "Doel bij driemaal drukken (optioneel)",
+            "triple_press_action": "Actie bij driemaal drukken (leeg: aan/uit schakelen, of script/scène uitvoeren)",
+            "hold_target": "Doel bij vasthouden",
+            "hold_target_action": "Actie op doel bij vasthouden (leeg: aan/uit schakelen, of script/scène uitvoeren)",
+            "hold_action": "Knopactie bij vasthouden",
+            "ramp_direction": "Dimrichting bij vasthouden",
+            "scenes": "Scènes doorlopen bij enkel drukken (optioneel, vervangt de knopactie)",
+            "step_curve": "Verdeling van draaistappen",
+            "follower_light": "Meedimmende lamp (optioneel)",
+            "follower_offset": "Helderheidsverschil van meedimmende lamp (procentpunten)",
+            "follower_min": "Minimale helderheid van meedimmende lamp (%)",
+            "hold_stop_on_release": "Acties bij vasthouden stoppen na loslaten",
+            "hold_max_seconds": "Maximale duur van vasthouden (seconden)",
+            "release_sequence": "Acties na loslaten",
+            "gestures_enabled": "Knopacties uitvoeren (uit: alleen volgen)"
+          },
+          "data_description": {
+            "button_response": "Meteen reageren voert de actie bij de eerste druk uit. Acties voor meerdere drukken en vasthouden moeten dan uit staan. Reageren na kort loslaten voert de actie na het eerste korte loslaten uit. Herkenning van meerdere drukken wacht op de voltooide bediening. De openbare BILRESA-gebeurtenissen blijven in elke modus volledig onderscheiden.",
+            "transition": "Snel draaien bereikt Home Assistant als groepen draaistappen. Eén draaistap wordt altijd meteen verwerkt. Een grotere groep wordt naar verhouding over maximaal deze tijd verdeeld. 0 schakelt het vloeiend verdelen uit.",
+            "step_curve": "Springt de helderheid bij snel draaien, vooral bij lage waarden? Kies dan Gelijkmatig voor het oog en probeer opnieuw. Laat dit op Lineair staan als de lamp het dimmen zelf al gelijkmatig verdeelt. Dubbel corrigeren geeft een minder goed resultaat.",
+            "follower_light": "De meedimmende lamp wordt alleen aangepast als ze al aan is."
+          }
+        }
+      },
+      "error": {
+        "follower_overlap": "Kies lampen of groepen zonder gemeenschappelijke leden.",
+        "fast_response_conflicts_with_multi_press": "Snel reageren kan niet samen met een doel voor meerdere drukken. Verwijder dat doel of kies herkenning van meerdere drukken.",
+        "instant_response_conflicts_with_multi_press": "Meteen reageren kan niet samen met een doel voor meerdere drukken. Verwijder dat doel of kies herkenning van meerdere drukken.",
+        "instant_response_conflicts_with_hold": "Meteen reageren kan niet samen met een aparte actie bij vasthouden. Kies Niets doen voor vasthouden, of kies reageren na kort loslaten of herkenning van meerdere drukken.",
+        "mode_target_mismatch": "Dit doel past niet bij de gekozen draaibediening. Kies een geschikte entiteit of wijzig wat draaien bedient.",
+        "multiple_targets_require_light_mode": "Meerdere doelen werken alleen voor lampen in de modi helderheid, kleurtemperatuur of kleur. Kies één doel of een lampmodus.",
+        "target_required": "Kies een doel voor deze actie of stel de actie in op Niets doen.",
+        "scene_cannot_turn_off": "Een scène kan alleen worden geactiveerd, niet uitgeschakeld. Kies Aan/uit schakelen of Inschakelen voor die bediening.",
+        "ramp_requires_light": "Dimmen bij vasthouden vereist een lamp als doel.",
+        "action_not_supported": "Dit doel ondersteunt deze actie niet. Kies een van de beschikbare acties.",
+        "actions_required": "Stel eerst de uit te voeren acties in het BILRESA-paneel in of kies een andere actie.",
+        "scenes_replace_short_press": "Scènes doorlopen vervangt enkel drukken. Die druk kan dan geen andere acties uitvoeren. Schakel scènes doorlopen uit of kies een andere actie."
+      },
+      "abort": {
+        "no_devices": "Er zijn nog geen ondersteunde BILRESA-apparaten gevonden. Controleer of het apparaat werkt in de Matter-integratie en probeer opnieuw."
+      }
+    }
+  },
+  "selector": {
+    "click_action": {
+      "options": {
+        "toggle": "Aan/uit schakelen",
+        "on": "Inschakelen",
+        "off": "Uitschakelen",
+        "play_pause": "Afspelen / pauzeren",
+        "play": "Afspelen",
+        "pause": "Pauzeren",
+        "stop": "Stoppen",
+        "next": "Volgend nummer",
+        "previous": "Vorig nummer",
+        "volume_up": "Volume verhogen",
+        "volume_down": "Volume verlagen",
+        "mute_toggle": "Geluid dempen / herstellen",
+        "open": "Openen",
+        "close": "Sluiten",
+        "lock": "Vergrendelen",
+        "start": "Starten",
+        "return_home": "Terug naar laadstation",
+        "locate": "Zoeken",
+        "press": "Op de knop drukken",
+        "trigger": "Automatisering uitvoeren",
+        "speed_up": "Snelheid verhogen",
+        "speed_down": "Snelheid verlagen",
+        "next_option": "Volgende optie",
+        "previous_option": "Vorige optie",
+        "first_option": "Eerste optie",
+        "last_option": "Laatste optie",
+        "step_up": "Verhogen",
+        "step_down": "Verlagen",
+        "run": "Acties uitvoeren (instellen in het BILRESA-paneel)",
+        "none": "Niets doen"
+      }
+    },
+    "target_action": {
+      "options": {
+        "toggle": "Aan/uit schakelen (een scène wordt geactiveerd)",
+        "on": "Inschakelen (een script of scène wordt uitgevoerd)",
+        "off": "Uitschakelen (een script wordt gestopt)",
+        "play_pause": "Afspelen / pauzeren",
+        "play": "Afspelen",
+        "pause": "Pauzeren",
+        "stop": "Stoppen",
+        "next": "Volgend nummer",
+        "previous": "Vorig nummer",
+        "volume_up": "Volume verhogen",
+        "volume_down": "Volume verlagen",
+        "mute_toggle": "Geluid dempen / herstellen",
+        "open": "Openen",
+        "close": "Sluiten",
+        "lock": "Vergrendelen",
+        "start": "Starten",
+        "return_home": "Terug naar laadstation",
+        "locate": "Zoeken",
+        "press": "Op de knop drukken",
+        "trigger": "Automatisering uitvoeren",
+        "speed_up": "Snelheid verhogen",
+        "speed_down": "Snelheid verlagen",
+        "next_option": "Volgende optie",
+        "previous_option": "Vorige optie",
+        "first_option": "Eerste optie",
+        "last_option": "Laatste optie",
+        "step_up": "Verhogen",
+        "step_down": "Verlagen",
+        "run": "Acties uitvoeren (instellen in het BILRESA-paneel)"
+      }
+    },
+    "scroll_mode": {
+      "options": {
+        "brightness": "Helderheid van lamp",
+        "color_temp": "Kleurtemperatuur van lamp",
+        "color": "Kleur van lamp",
+        "volume": "Volume van mediaspeler",
+        "cover_position": "Stand van afdekking",
+        "temperature": "Doeltemperatuur van thermostaat",
+        "fan_speed": "Ventilatorsnelheid",
+        "number": "Getalwaarde",
+        "buttons": "Alleen knoppen (draaien doet niets)"
+      }
+    },
+    "hold_action": {
+      "options": {
+        "toggle": "Doel aan/uit schakelen (een scène wordt geactiveerd)",
+        "ramp": "Doel dimmen tijdens vasthouden",
+        "run": "Acties uitvoeren (instellen in het BILRESA-paneel)",
+        "none": "Niets doen"
+      }
+    },
+    "binding_profile": {
+      "options": {
+        "custom": "Aangepast",
+        "light": "Lampdimmer",
+        "media": "Mediavolume",
+        "cover": "Stand van afdekking",
+        "climate": "Thermostaattemperatuur",
+        "scenes": "Scènekeuze"
+      }
+    },
+    "button_response": {
+      "options": {
+        "instant": "Meteen bij de eerste druk",
+        "fast": "Na kort loslaten",
+        "multi_press": "Enkel, dubbel of driemaal drukken herkennen"
+      }
+    },
+    "dual_button_response": {
+      "options": {
+        "instant": "Meteen bij de eerste druk",
+        "fast": "Na kort loslaten",
+        "multi_press": "Enkel of dubbel drukken herkennen"
+      }
+    },
+    "ramp_direction": {
+      "options": {
+        "alternate": "Na elke keer vasthouden van richting wisselen",
+        "up": "Altijd lichter",
+        "down": "Altijd donkerder"
+      }
+    },
+    "step_curve": {
+      "options": {
+        "linear": "Lineair (standaard)",
+        "perceptual": "Gelijkmatig voor het oog"
+      }
+    }
+  },
+  "system_health": {
+    "info": {
+      "configured": "Ingesteld",
+      "config_entry_state": "Status van integratie-instelling",
+      "matter_server_connected": "Matter Server verbonden",
+      "matter_server_version": "SDK-versie van Matter Server",
+      "matter_event_source": "Bron van Matter-gebeurtenissen",
+      "last_matter_event": "Laatste Matter-gebeurtenis",
+      "fallback_reason": "Reden voor reservebron van gebeurtenissen",
+      "discovered_wheels": "Gevonden BILRESA-draaiwielen",
+      "configured_bindings": "Ingestelde bedieningskoppelingen"
+    }
+  },
+  "issues": {
+    "cannot_connect": {
+      "title": "Matter Server is niet bereikbaar",
+      "description": "IKEA BILRESA kan geen verbinding maken met Matter Server op {url}. De draaiwielen reageren pas weer als de verbinding is hersteld. Controleer of de Matter Server-app (add-on) draait."
+    },
+    "legacy_device_triggers": {
+      "title": "Automatiseringen gebruiken vervallen BILRESA-apparaattriggers",
+      "description": "Deze automatiseringen starten nog met een BILRESA-apparaattrigger en werken niet meer:\n\n{automations}\n\nApparaattriggers zijn verwijderd omdat het draaiwiel sinds Home Assistant 2026.8 uitsluitend bij de Matter-integratie hoort. Open elke automatisering. Verwijder de apparaattrigger en voeg een BILRESA-trigger toe, bijvoorbeeld **BILRESA omhoog gedraaid**, met de Kanaal-entiteit van het draaiwiel als doel. Deze melding verdwijnt zodra geen automatisering meer een apparaattrigger gebruikt."
+    }
+  },
+  "entity": {
+    "event": {
+      "channel": {
+        "name": "Kanaal {channel}",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "rotate_up": "Omhoog gedraaid",
+              "rotate_down": "Omlaag gedraaid",
+              "press": "Eenmaal gedrukt",
+              "double_press": "Tweemaal gedrukt",
+              "triple_press": "Driemaal gedrukt",
+              "hold": "Vastgehouden",
+              "release": "Losgelaten na vasthouden"
+            }
+          },
+          "notches": {
+            "name": "Draaistappen"
+          },
+          "presses": {
+            "name": "Aantal drukken"
+          },
+          "observed_duration_ms": {
+            "name": "Waargenomen duur"
+          }
+        }
+      },
+      "button": {
+        "name": "Knop {button}",
+        "state_attributes": {
+          "event_type": {
+            "state": {
+              "press": "Eenmaal gedrukt",
+              "double_press": "Tweemaal gedrukt",
+              "triple_press": "Driemaal gedrukt",
+              "hold": "Vastgehouden",
+              "release": "Losgelaten na vasthouden"
+            }
+          },
+          "presses": {
+            "name": "Aantal drukken"
+          },
+          "observed_duration_ms": {
+            "name": "Waargenomen duur"
+          }
+        }
+      }
+    },
+    "number": {
+      "dial": {
+        "name": "Draaiwaarde {channel}"
+      }
+    },
+    "switch": {
+      "channel_button": {
+        "name": "Knop {channel}"
+      }
+    }
+  },
+  "triggers": {
+    "rotated_up": {
+      "name": "BILRESA omhoog gedraaid",
+      "description": "Start wanneer een BILRESA-draaiwielkanaal omhoog wordt gedraaid."
+    },
+    "rotated_down": {
+      "name": "BILRESA omlaag gedraaid",
+      "description": "Start wanneer een BILRESA-draaiwielkanaal omlaag wordt gedraaid."
+    },
+    "pressed": {
+      "name": "BILRESA eenmaal gedrukt",
+      "description": "Start wanneer eenmaal op een BILRESA-knop wordt gedrukt."
+    },
+    "double_pressed": {
+      "name": "BILRESA tweemaal gedrukt",
+      "description": "Start wanneer tweemaal op een BILRESA-knop wordt gedrukt."
+    },
+    "triple_pressed": {
+      "name": "BILRESA driemaal gedrukt",
+      "description": "Start wanneer driemaal op de knop van een BILRESA-draaiwiel wordt gedrukt."
+    },
+    "held": {
+      "name": "BILRESA vastgehouden",
+      "description": "Start wanneer een BILRESA-knop wordt vastgehouden."
+    },
+    "released": {
+      "name": "BILRESA losgelaten na vasthouden",
+      "description": "Start wanneer een BILRESA-knop na vasthouden wordt losgelaten."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Gedeeld bedieningsprofiel",
+        "description": "Kanalen op deze afstandsbedieningen delen hun bestaande bedieningskoppelingen. Een wijziging werkt hetzelfde kanaal bij de andere leden bij. Maak de selectie leeg om ze los te koppelen.",
+        "data": {
+          "profile_name": "Profielnaam",
+          "profile_members": "Gekoppelde afstandsbedieningen"
+        }
+      }
+    }
+  }
+}

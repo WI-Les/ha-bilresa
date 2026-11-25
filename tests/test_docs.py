@@ -34,7 +34,7 @@ _HEADING = re.compile(r"^(#{1,6}) (.+?)\s*$")
 
 
 def _documents() -> list[Path]:
-    files = [README_EN]
+    files = [README_EN, ROOT / "README.nl.md"]
     files += sorted((ROOT / "docs").rglob("*.md"))
     return files
 
@@ -107,6 +107,20 @@ def test_every_relative_link_and_anchor_resolves(path: Path) -> None:
 
 def test_readme_stays_an_overview() -> None:
     assert len(README_EN.read_text(encoding="utf-8").splitlines()) <= README_MAX_LINES
+
+
+def test_dutch_onboarding_and_reciprocal_language_links() -> None:
+    dutch = ROOT / "README.nl.md"
+    assert "README.nl.md" in _links(README_EN)
+    assert "README.md" in _links(dutch)
+    assert "docs/images/bilresa-mastercontrol-banner.png" in _links(dutch)
+    assert "marketplace_repository.svg" in dutch.read_text(encoding="utf-8")
+    for name in ("QUICK-START.md", "INSTALLATION.md", "USER-GUIDE.md"):
+        english = ROOT / "docs" / name
+        translated = ROOT / "docs/nl" / name
+        assert f"nl/{name}" in _links(english)
+        assert f"../{name}" in _links(translated)
+        assert "0.2.1" in translated.read_text(encoding="utf-8")
 
 
 def test_readme_links_to_hardware_plan() -> None:
@@ -186,6 +200,7 @@ def _prose_documents() -> list[Path]:
         for name in (
             "README.md",
             "README.cs.md",
+            "README.nl.md",
             "CHANGELOG.md",
             "PROJECT_STATUS.md",
             "AGENTS.md",

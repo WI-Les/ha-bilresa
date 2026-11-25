@@ -1,5 +1,12 @@
 # Project status
 
+Version **0.2.1** adds complete Dutch localization and Dutch onboarding documentation
+to 0.2.0. English, Czech and Dutch ship together. The panel already selects the
+viewer's profile language; instance language remains the fallback and the source
+for Home Assistant entity names. No runtime contracts, storage or pairing changes
+are introduced. Release validation is recorded in [0.2.1 notes](docs/nl/RELEASE-0.2.1.md).
+No live Home Assistant installation was changed for this localization release.
+
 BILRESA.MasterControl 0.2.0 extends the existing runtime; it retains the
 `ikea_bilresa` domain, connection and entity identifiers. New hold lifecycle and
 linked-profile tests cover the software behaviour. Physical acceptance of all

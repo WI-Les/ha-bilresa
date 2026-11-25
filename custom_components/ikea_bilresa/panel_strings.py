@@ -6,17 +6,13 @@ fixed categories — `config`, `selector`, `system_health`, `issues`,
 translation category for one. Inventing a category risks hassfest, and the
 frontend would not fetch it anyway.
 
-`PANEL_ROADMAP.md` requires English and Czech to stay aligned. Two JSON files in
-two directories is precisely how they drift: someone adds an English key and the
-Czech one silently falls back or vanishes. Here the two languages sit on adjacent
-lines, and `test_panel_strings.py` fails the build if one gains a key the other
-lacks. Alignment by construction rather than by discipline.
+English, Czech and Dutch share this catalog. Tests require identical keys and
+placeholders in every language.
 
-The language is `hass.config.language` — the instance's, not the individual
-user's. Home Assistant has no per-user language available to a WebSocket handler
-or to panel registration, so a household where one person reads English and
-another Czech gets one of them. Recorded as a known limitation rather than
-pretended away; revisit if HA exposes a per-connection locale.
+The registered panel includes all catalogs. The frontend selects the viewer's
+`hass.language` (including regional base tags) and sends it with snapshot
+requests. Older clients and callers without a locale use `hass.config.language`.
+Home Assistant's entity names still follow the instance language.
 """
 
 from __future__ import annotations
@@ -25,7 +21,7 @@ from typing import Any
 
 DEFAULT_LANGUAGE = "en"
 
-# Both languages adjacent, deliberately. Add a key to one, add it to the other.
+# Keep every language aligned when adding keys.
 STRINGS: dict[str, dict[str, str]] = {
     "en": {
         "action_stop_hold_and_run": "Stop hold actions and run release actions",
@@ -1106,6 +1102,582 @@ STRINGS: dict[str, dict[str, str]] = {
         ),
         "menu": "Otevřít postranní panel Home Assistant",
     },
+    "nl": {
+        "action_stop_hold_and_run": (
+            "Acties bij vasthouden stoppen en acties na loslaten uitvoeren"
+        ),
+        "mode_buttons": "Alleen knoppen (draaien doet niets)",
+        "gesture_activation": "Knopacties",
+        "gesture_active": "Actief",
+        "gesture_shadow": "Alleen volgen (draaien blijft actief)",
+        "hold_stop_on_release": "Bij loslaten",
+        "hold_stop_enabled": "Acties bij vasthouden stoppen",
+        "hold_stop_disabled": "Acties bij vasthouden laten aflopen",
+        "hold_max_seconds": "Maximale duur van vasthouden (seconden)",
+        "release_actions": "Acties na loslaten",
+        "action_stop_hold": "Acties bij vasthouden stoppen",
+        "shared_profile_notice": (
+            "Gedeeld profiel: {name}. Als u dit kanaal opslaat, worden de "
+            "bestaande bedieningskoppelingen op de gekoppelde afstandsbedieningen"
+            " bijgewerkt."
+        ),
+        "connected": "Verbonden",
+        "unavailable": "Niet beschikbaar",
+        "unknown": "Geen status ontvangen",
+        "not_configured": "Niet ingesteld",
+        "add_binding": "Bedieningskoppeling toevoegen",
+        "edit_binding": "Bediening instellen",
+        "community_tool_link": "Ontwerp labels voor uw schakelaars",
+        "community_tool_note": "Hulpmiddel van Liquidmasl uit de community",
+        "community_tool_new_window": "opent in een nieuw venster",
+        "save_short": "Opslaan",
+        "discard_changes": "Verwerpen",
+        "discard_armed": "Verwerpen?",
+        "target_unavailable": "{target} — niet beschikbaar",
+        "target_missing": "{target} — bestaat niet meer",
+        "configured": "Ingesteld",
+        "button_actions": "Knopacties",
+        "multiple_targets": "{count} doelen",
+        "mode_brightness": "Vloeiend dimmen",
+        "mode_color_temp": "Kleurtemperatuur",
+        "mode_color": "Kleur",
+        "mode_volume": "Volume",
+        "mode_cover_position": "Stand van afdekking",
+        "mode_temperature": "Temperatuur",
+        "mode_fan_speed": "Ventilatorsnelheid",
+        "mode_number": "Waarde",
+        "mode_scenes": "Scènes ({count})",
+        "quantity_brightness": "Helderheid",
+        "quantity_color_temp": "Wittemperatuur",
+        "quantity_color": "Kleur",
+        "quantity_volume": "Volume",
+        "quantity_cover_position": "Stand",
+        "quantity_temperature": "Temperatuur",
+        "quantity_fan_speed": "Snelheid",
+        "quantity_number": "Waarde",
+        "no_activity": "Nog geen activiteit",
+        "last_on_channel": "laatst op kanaal {channel}",
+        "last_on_button": "laatst op knop {button}",
+        "overview_title": "BILRESA-apparaten",
+        "summary_connected": "{count} verbonden",
+        "summary_unavailable": "{count} niet beschikbaar",
+        "summary_unknown": "{count} zonder status",
+        "matter_connected": "Matter verbonden",
+        "matter_offline": "Matter offline",
+        "banner_matter_offline": (
+            "Matter is niet verbonden. De apparaten hieronder tonen hun laatst "
+            "bekende status."
+        ),
+        "banner_updates_stopped": (
+            "Live bijwerken is gestopt. Deze weergave is mogelijk verouderd."
+        ),
+        "banner_target_missing": (
+            "Bedieningskoppelingen op {count} apparaten verwijzen naar entiteiten"
+            " die niet meer bestaan in Home Assistant. Open een gemarkeerde "
+            "bediening en kies een ander doel."
+        ),
+        "banner_target_missing_named": (
+            "De bedieningskoppeling op kanaal {channel} van {wheel} verwijst naar"
+            " een entiteit die niet meer bestaat in Home Assistant. Open het "
+            "kanaal en kies een ander doel."
+        ),
+        "banner_target_missing_button_named": (
+            "De bedieningskoppeling op knop {button} van {wheel} verwijst naar "
+            "een entiteit die niet meer bestaat in Home Assistant. Open de knop "
+            "en kies een ander doel."
+        ),
+        "empty_title": "Geen BILRESA-apparaten gevonden",
+        "empty_connected": (
+            "De integratie is verbonden, maar heeft nog geen apparaat gevonden."
+        ),
+        "empty_offline": (
+            "Home Assistant is niet verbonden met Matter. Daardoor zijn er geen "
+            "apparaten zichtbaar."
+        ),
+        "error_title": "De integratie is niet bereikbaar",
+        "retry": "Opnieuw proberen",
+        "back": "Terug naar alle BILRESA-apparaten",
+        "detail_views": "Apparaatweergaven",
+        "field_step_curve": "Verdeling van draaistappen",
+        "field_step_curve_help": (
+            "Springt de helderheid bij snel draaien, vooral bij lage waarden? "
+            "Kies dan Gelijkmatig voor het oog en probeer opnieuw. Laat dit op "
+            "Lineair staan als de lamp het dimmen zelf al gelijkmatig verdeelt. "
+            "Dubbel corrigeren geeft een minder goed resultaat."
+        ),
+        "step_curve_linear": "Lineair (standaard)",
+        "step_curve_perceptual": "Gelijkmatig voor het oog",
+        "channel_off_note": "doet niets totdat u het hier weer inschakelt.",
+        "settings_dial_intro": (
+            "Elk kanaal heeft een getalwaarde van 1 tot 100. Draaien verandert "
+            "die waarde en automatiseringen kunnen ze uitlezen. Dit staat los van"
+            " de bedieningskoppeling."
+        ),
+        "settings_dial_title": "Draaiwaarde",
+        "settings_step_help": "In de eigen eenheden van de draaiwaarde, van 1 tot 100.",
+        "settings_channel_enabled": "Kanaal {channel} actief",
+        "settings_step": "Wijziging van draaiwaarde per draaistap",
+        "settings_acceleration": "Versnelling van draaiwaarde",
+        "settings_acceleration_help": (
+            "Sneller draaien verandert de draaiwaarde meer per draaistap. 0 % "
+            "schakelt dit uit."
+        ),
+        "settings_save": "Draaiwaarde opslaan",
+        "settings_saved": "Draaiwaarde opgeslagen",
+        "settings_disabled_badge": "Uit",
+        "settings_error_conflict": (
+            "Deze instellingen zijn elders gewijzigd. Open het draaiwiel opnieuw "
+            "en probeer nogmaals."
+        ),
+        "settings_error_generic": "De instellingen konden niet worden opgeslagen.",
+        "tab_channels": "Kanalen",
+        "tab_buttons": "Knoppen",
+        "tab_live": "Live testen",
+        "tab_diagnostics": "Diagnose",
+        "detail_area_none": "Geen ruimte",
+        "detail_last_activity": "Laatste activiteit",
+        "detail_last_channel": "Laatst actieve kanaal",
+        "detail_no_last_channel": "Nog geen kanaal waargenomen",
+        "detail_last_button": "Laatst actieve knop",
+        "detail_no_last_button": "Nog geen knop waargenomen",
+        "detail_channels_heading": "Bediening per fysieke stand",
+        "channel_title": "Kanaal {channel}",
+        "channel_binding": "Bedieningskoppeling",
+        "button_title": "Knop {button}",
+        "target_none": "Geen doel ingesteld",
+        "target_same_as_rotation": "Hetzelfde doel als bij draaien",
+        "binding_editor_title": "Bediening van kanaal {channel} instellen",
+        "binding_editor_button_title": "Bediening van knop {button} instellen",
+        "field_mode": "Modus",
+        "field_target": "Doel",
+        "field_target_help": (
+            "Een doel is bijvoorbeeld een lamp of luidspreker. Kies meerdere "
+            "lampen om ze samen te bedienen. Ze krijgen allemaal dezelfde waarde "
+            "van het draaiwiel."
+        ),
+        "field_step": "Wijziging van doel per draaistap",
+        "field_step_help": "Hoeveel één draaistap de waarde van het doel verandert.",
+        "field_acceleration": "Versnelling bij draaien",
+        "field_acceleration_help": (
+            "Sneller draaien verandert het doel meer per draaistap. 0 % schakelt "
+            "dit uit."
+        ),
+        "field_transition_help": (
+            "Snel draaien komt binnen als groepen draaistappen. Een grotere groep"
+            " wordt over maximaal deze tijd verdeeld. 0 s schakelt het vloeiend "
+            "verdelen uit."
+        ),
+        "target_empty_is_rotation": (
+            "Laat leeg om het doel van de draaibediening te gebruiken."
+        ),
+        "scene_add": "Scène toevoegen",
+        "scene_add_placeholder": "Scène toevoegen…",
+        "scene_move_up": "{scene} omhoog verplaatsen",
+        "scene_move_down": "{scene} omlaag verplaatsen",
+        "scene_remove": "{scene} verwijderen",
+        "ledger_then_release": "{hold}; bij loslaten: {release}",
+        "field_transition": "Grote sprongen vloeiend verdelen",
+        "field_follower_light": "Meedimmende lamp (optioneel)",
+        "field_follower_help": "Volgt de helderheid alleen als de lamp al aan is.",
+        "field_follower_offset": (
+            "Helderheidsverschil van meedimmende lamp (procentpunten)"
+        ),
+        "field_follower_min": "Minimale helderheid van meedimmende lamp",
+        "field_min_brightness": "Minimale helderheid",
+        "field_max_brightness": "Maximale helderheid",
+        "field_press_response": "Reactie",
+        "rotation_more": "Meer draai-instellingen",
+        "gesture_needs_waiting": "Vereist de reactie op kort drukken ‘{response}’.",
+        "gesture_action": "Actie",
+        "gesture_target": "Doel",
+        "field_ramp_direction": "Dimrichting",
+        "field_scenes": "Scènes",
+        "field_scenes_help": (
+            "Elke korte druk activeert de volgende scène, in deze volgorde."
+        ),
+        "section_rotation": "Draaien",
+        "click_toggle": "Doel aan/uit schakelen",
+        "click_on": "Doel inschakelen",
+        "click_off": "Doel uitschakelen",
+        "click_none": "Geen actie",
+        "click_scenes": "Scènes doorlopen",
+        "click_scene_on": "Scène activeren",
+        "click_script_on": "Script uitvoeren",
+        "click_script_off": "Script stoppen",
+        "click_script_toggle": "Script starten/stoppen",
+        "click_play_pause": "Afspelen / pauzeren",
+        "click_play": "Afspelen",
+        "click_pause": "Pauzeren",
+        "click_stop": "Stoppen",
+        "click_next": "Volgend nummer",
+        "click_previous": "Vorig nummer",
+        "click_volume_up": "Volume verhogen",
+        "click_volume_down": "Volume verlagen",
+        "click_mute_toggle": "Geluid dempen / herstellen",
+        "click_open": "Openen",
+        "click_close": "Sluiten",
+        "click_lock": "Vergrendelen",
+        "click_start": "Starten",
+        "click_return_home": "Terug naar laadstation",
+        "click_locate": "Zoeken",
+        "click_press": "Op de knop drukken",
+        "click_trigger": "Automatisering uitvoeren",
+        "click_speed_up": "Snelheid verhogen",
+        "click_speed_down": "Snelheid verlagen",
+        "click_next_option": "Volgende optie",
+        "click_previous_option": "Vorige optie",
+        "click_first_option": "Eerste optie",
+        "click_last_option": "Laatste optie",
+        "click_step_up": "Verhogen",
+        "click_step_down": "Verlagen",
+        "cover_open_warning": (
+            "Een druk op deze knop opent een garagepoort of hek, ook als niemand "
+            "toezicht houdt."
+        ),
+        "script_run_help": (
+            "Start het script en geeft de herkende bediening door via de "
+            "variabelen gesture, presses, channel, endpoint en device."
+        ),
+        "script_toggle_help": (
+            "Start het script of stopt het als het al loopt. Bij starten/stoppen "
+            "kunnen geen variabelen worden meegegeven."
+        ),
+        "gesture_hold_effect": "Effect op het doel",
+        "hold_toggle": "Actie op het doel voor vasthouden",
+        "hold_ramp": "Doel van draaibediening dimmen",
+        "hold_none": "Geen actie",
+        "ramp_direction_alternate": "Afwisselend lichter en donkerder",
+        "ramp_direction_up": "Altijd lichter",
+        "ramp_direction_down": "Altijd donkerder",
+        "button_response_instant": "Uitvoeren zodra u drukt",
+        "button_response_fast": "Uitvoeren na de eerste keer kort loslaten",
+        "button_response_multi_press": "Wachten op enkel/dubbel/driemaal drukken",
+        "dual_button_response_instant": "Uitvoeren zodra u drukt",
+        "dual_button_response_fast": "Uitvoeren na de eerste keer kort loslaten",
+        "dual_button_response_multi_press": "Wachten op enkel of dubbel drukken",
+        "save_binding": "Bedieningskoppeling opslaan",
+        "delete_binding": "Bedieningskoppeling verwijderen",
+        "keep_binding": "Bedieningskoppeling behouden",
+        "delete_binding_confirm": (
+            "Deze bedieningskoppeling verwijderen? Dit kanaal van het draaiwiel "
+            "bedient de doelen dan niet meer."
+        ),
+        "delete_button_binding_confirm": (
+            "Deze bedieningskoppeling verwijderen? Deze knop bedient de doelen "
+            "dan niet meer."
+        ),
+        "binding_saved": "Bedieningskoppeling opgeslagen en geactiveerd.",
+        "binding_validation_failed": (
+            "Verbeter de gemarkeerde velden en sla opnieuw op."
+        ),
+        "binding_conflict": (
+            "Deze bedieningskoppeling is elders gewijzigd. De laatst opgeslagen "
+            "waarden staan nu in beeld. Controleer ze voordat u opslaat."
+        ),
+        "binding_save_failed": (
+            "De bedieningskoppeling kon niet worden opgeslagen: {error}"
+        ),
+        "binding_delete_failed": (
+            "De bedieningskoppeling kon niet worden verwijderd: {error}"
+        ),
+        "binding_test_failed": "De test kon niet worden uitgevoerd: {error}",
+        "binding_error_unloaded": "De integratie is niet geladen.",
+        "binding_error_wheel_missing": "Het draaiwiel is niet meer beschikbaar.",
+        "binding_error_binding_missing": "De bedieningskoppeling bestaat niet meer.",
+        "binding_error_channel_occupied": (
+            "Dit kanaal heeft al een andere bedieningskoppeling."
+        ),
+        "binding_error_button_occupied": (
+            "Deze knop heeft al een andere bedieningskoppeling."
+        ),
+        "binding_error_control_mismatch": (
+            "Deze bediening hoort niet bij het gekozen BILRESA-apparaat."
+        ),
+        "binding_error_control_missing": "Deze bediening is niet meer beschikbaar.",
+        "binding_error_binding_address_mismatch": (
+            "Deze bedieningskoppeling hoort bij een andere bediening. Laad het "
+            "paneel opnieuw en probeer nogmaals."
+        ),
+        "binding_error_gesture_unsupported": (
+            "Dit BILRESA-apparaat ondersteunt deze bediening niet."
+        ),
+        "binding_error_binding_not_configured": (
+            "Stel deze bediening in voordat u ze test."
+        ),
+        "validation_invalid_value": "Kies of vul een geldige waarde in.",
+        "validation_follower_overlap": (
+            "Kies lampen of groepen zonder gemeenschappelijke leden."
+        ),
+        "validation_target_required": "Kies een doel.",
+        "validation_ramp_requires_light": (
+            "Dimmen bij vasthouden vereist een lamp als doel."
+        ),
+        "validation_scene_cannot_turn_off": (
+            "Een scène kan alleen worden geactiveerd. U kunt ze niet "
+            "uitschakelen. Kies Doel aan/uit schakelen of Doel inschakelen."
+        ),
+        "validation_scenes_required": "Voeg minstens één scène toe.",
+        "validation_action_not_supported": (
+            "Dit doel ondersteunt deze actie niet. Kies een van de beschikbare acties."
+        ),
+        "validation_actions_required": (
+            "Voeg minstens één uit te voeren actie toe of kies een andere actie."
+        ),
+        "validation_actions_incomplete": "Kies voor elke rij een actie.",
+        "validation_actions_invalid": (
+            "De ingevoerde acties zijn ongeldig. Verbeter ze of laad opnieuw."
+        ),
+        "validation_scenes_replace_short_press": (
+            "Scènes doorlopen vervangt kort drukken. Die druk kan dan geen andere"
+            " acties uitvoeren."
+        ),
+        "validation_mode_target_mismatch": (
+            "De gekozen draaimodus kan deze entiteit niet bedienen."
+        ),
+        "validation_multiple_targets_require_light_mode": (
+            "Meerdere doelen werken alleen voor lampen in de modi dimmen, "
+            "kleurtemperatuur of kleur."
+        ),
+        "validation_maximum_must_exceed_minimum": (
+            "De maximale helderheid moet groter zijn dan de minimale helderheid."
+        ),
+        "validation_fast_response_conflicts_with_multi_press": (
+            "Reageren na kort loslaten kan niet samen met dubbel of driemaal drukken."
+        ),
+        "validation_instant_response_conflicts_with_multi_press": (
+            "Meteen reageren kan niet samen met dubbel of driemaal drukken."
+        ),
+        "validation_instant_response_conflicts_with_hold": (
+            "Meteen reageren vereist dat de actie bij vasthouden op Geen actie staat."
+        ),
+        "binding_gesture_rotation": "Links / rechts draaien",
+        "binding_gesture_short_press": "Kort drukken",
+        "binding_gesture_double_press": "Dubbel drukken",
+        "binding_gesture_triple_press": "Driemaal drukken",
+        "binding_gesture_hold": "Vasthouden",
+        "binding_gesture_release": "Loslaten",
+        "action_toggle": "Aan/uit schakelen",
+        "action_turn_on": "Inschakelen",
+        "action_turn_off": "Uitschakelen",
+        "action_run": "Uitvoeren",
+        "action_stop": "Stoppen",
+        "action_none": "Geen actie",
+        "action_run_actions": "Acties uitvoeren",
+        "click_run": "Acties uitvoeren",
+        "hold_run": "Acties uitvoeren",
+        "actions_label": "Uit te voeren acties",
+        "actions_help": (
+            "Schrijf de acties zoals in een automatisering. De bediening wordt "
+            "doorgegeven via de variabelen gesture, presses, channel, endpoint en"
+            " device."
+        ),
+        "actions_loading": "De actie-editor van Home Assistant wordt geladen…",
+        "actions_fallback": (
+            "De actie-editor van Home Assistant is hier niet beschikbaar. U kunt "
+            "de acties als eenvoudige lijst bewerken. De gegevens blijven "
+            "dezelfde; er gaat niets verloren."
+        ),
+        "actions_empty": "Nog geen acties.",
+        "actions_add": "Actie toevoegen",
+        "actions_remove": "Verwijderen",
+        "actions_service": "Actie",
+        "actions_target_ids": "Entiteiten, gescheiden door komma’s",
+        "actions_data": "Gegevens (JSON)",
+        "actions_json": "Alle acties als JSON",
+        "actions_json_invalid": "Dit is geen geldige JSON in de verwachte vorm.",
+        "actions_choose": "Kies een actie",
+        "actions_complex": (
+            "Dit is een uitgebreidere actie. Bewerk ze hieronder in JSON:"
+        ),
+        "action_cycle_scenes": "Scènes doorlopen",
+        "action_ramp": "Doel dimmen",
+        "action_ramp_alternate": "Lichter of donkerder dimmen",
+        "action_ramp_up": "Lichter dimmen",
+        "action_ramp_down": "Donkerder dimmen",
+        "action_stop_ramp": "Dimmen stoppen",
+        "action_play_pause": "Afspelen / pauzeren",
+        "action_play": "Afspelen",
+        "action_pause": "Pauzeren",
+        "action_next": "Volgend nummer",
+        "action_previous": "Vorig nummer",
+        "action_volume_up": "Volume verhogen",
+        "action_volume_down": "Volume verlagen",
+        "action_mute_toggle": "Geluid dempen / herstellen",
+        "action_open": "Openen",
+        "action_close": "Sluiten",
+        "action_lock": "Vergrendelen",
+        "action_start": "Starten",
+        "action_return_home": "Terug naar laadstation",
+        "action_locate": "Zoeken",
+        "action_press": "Op de knop drukken",
+        "action_trigger": "Automatisering uitvoeren",
+        "action_speed_up": "Snelheid verhogen",
+        "action_speed_down": "Snelheid verlagen",
+        "action_next_option": "Volgende optie",
+        "action_previous_option": "Vorige optie",
+        "action_first_option": "Eerste optie",
+        "action_last_option": "Laatste optie",
+        "action_step_up": "Verhogen",
+        "action_step_down": "Verlagen",
+        "wheel_missing_title": "BILRESA-apparaat niet meer beschikbaar",
+        "wheel_missing_body": (
+            "Het apparaat is verwijderd of de integratie is opnieuw geladen. Ga "
+            "terug naar het overzicht."
+        ),
+        "live_intro": (
+            "Draai aan het wiel of druk erop. U ziet eerst de herkende bediening."
+            " Bij ingestelde kanalen ziet u daarna de actie die naar het doel is "
+            "gestuurd."
+        ),
+        "live_button_intro": (
+            "Druk op een van de knoppen. U ziet eerst de herkende bediening. Bij "
+            "ingestelde knoppen ziet u daarna de actie die naar het doel is "
+            "gestuurd."
+        ),
+        "live_result_label": "Actieresultaat",
+        "live_event_label": "Laatste bediening",
+        "live_listening": "Luisteren",
+        "live_stopped": "Luisteren gestopt",
+        "live_waiting_title": "Wachten op het draaiwiel",
+        "live_waiting_body": (
+            "Draai aan dit wiel of druk erop. Activiteit verschijnt alleen "
+            "terwijl deze weergave open is."
+        ),
+        "live_button_waiting_title": "Wachten op een druk op de knop",
+        "live_button_waiting_body": (
+            "Druk eenmaal of tweemaal op een knop of houd ze vast. Activiteit "
+            "verschijnt alleen terwijl deze weergave open is."
+        ),
+        "live_error": (
+            "Live activiteit is gestopt. Sluit Live testen en open het opnieuw om"
+            " nogmaals te proberen."
+        ),
+        "result_unavailable": "Bediening herkend",
+        "result_unavailable_detail": (
+            "Voor deze gebeurtenis is geen gedetailleerd resultaat beschikbaar."
+        ),
+        "result_pending_detail": "Wachten tot de ingestelde actie klaar is.",
+        "result_not_configured_channel_detail": (
+            "De bediening heeft Home Assistant bereikt."
+        ),
+        "result_not_configured_button_detail": (
+            "De bediening heeft Home Assistant bereikt."
+        ),
+        "result_gesture_rotate": "Draaien herkend",
+        "result_gesture_press": "Drukken herkend",
+        "result_gesture_double_press": "Dubbel drukken herkend",
+        "result_gesture_triple_press": "Driemaal drukken herkend",
+        "result_gesture_hold": "Vasthouden herkend",
+        "result_gesture_release": "Loslaten herkend",
+        "result_gesture_received": "Bediening herkend",
+        "dispatch_success": "Actie verstuurd",
+        "dispatch_accepted": "Home Assistant heeft de actie aanvaard",
+        "dispatch_pending": "Actie wordt naar Home Assistant gestuurd",
+        "dispatch_skipped": "Bedieningskoppeling heeft de actie overgeslagen",
+        "dispatch_not_configured": "Dit kanaal bedient nog niets",
+        "dispatch_not_configured_button": "Deze knop bedient nog niets",
+        "dispatch_completed": "Actie van bedieningskoppeling voltooid",
+        "dispatch_received": "Bediening ontvangen; wachten op resultaat",
+        "dispatch_failed": "Actie niet verstuurd",
+        "dispatch_unknown": "Actiestatus niet beschikbaar",
+        "result_kind_brightness": "Helderheid",
+        "result_kind_color_temperature": "Kleurtemperatuur",
+        "result_kind_color": "Kleur",
+        "result_kind_volume": "Volume",
+        "result_kind_position": "Stand",
+        "result_kind_temperature": "Temperatuur",
+        "result_kind_fan_speed": "Ventilatorsnelheid",
+        "result_kind_value": "Waarde",
+        "result_scene": "Scène {position}/{total} · {target}",
+        "result_entity_action": "{action} · {target}",
+        "result_ramp_stopped": "Dimmen bij vasthouden gestopt",
+        "result_fast_press_complete": "Enkel drukken meteen verwerkt",
+        "service_toggle": "Aan/uit schakelen",
+        "service_turn_on": "Inschakelen",
+        "service_turn_off": "Uitschakelen",
+        "service_run": "Uitvoeren",
+        "service_stop": "Stoppen",
+        "source_panel_test": "Gestart met de testknoppen in het paneel",
+        "test_controls_heading": "Ingestelde acties testen",
+        "test_controls_intro": (
+            "Deze knoppen voeren de echte bedieningskoppeling uit zonder fysiek "
+            "draaiwiel. Ze kunnen doelen onmiddellijk veranderen."
+        ),
+        "test_controls_button_intro": (
+            "Deze knoppen voeren de echte bedieningskoppeling uit zonder op de "
+            "fysieke knop te drukken. Ze kunnen doelen onmiddellijk veranderen."
+        ),
+        "test_channel": "Kanaal {channel} testen",
+        "test_button": "Knop {button} testen",
+        "test_rotate_down": "Omlaag draaien",
+        "test_rotate_up": "Omhoog draaien",
+        "test_single": "Enkel drukken",
+        "test_double": "Dubbel drukken",
+        "test_triple": "Driemaal drukken",
+        "test_hold": "Vasthouden starten",
+        "test_release": "Loslaten na vasthouden",
+        "test_no_bindings": "Stel een kanaal in om de paneeltests te gebruiken.",
+        "test_no_button_bindings": "Stel een knop in om de paneeltests te gebruiken.",
+        "direction_up": "omhoog",
+        "direction_down": "omlaag",
+        "gesture_rotate": (
+            "Kanaal {channel} · {direction} draaien · {delta} draaistappen"
+        ),
+        "gesture_press_single": "Kanaal {channel} · enkel drukken",
+        "gesture_press_double": "Kanaal {channel} · dubbel drukken",
+        "gesture_press_triple": "Kanaal {channel} · driemaal drukken",
+        "gesture_hold": "Kanaal {channel} · vasthouden",
+        "gesture_release": "Kanaal {channel} · loslaten",
+        "gesture_unknown": "Kanaal {channel} · activiteit ontvangen",
+        "live_channels_heading": "Kanalen",
+        "gesture_button_press_single": "Knop {button} · enkel drukken",
+        "gesture_button_press_double": "Knop {button} · dubbel drukken",
+        "gesture_button_hold": "Knop {button} · vasthouden",
+        "gesture_button_release": "Knop {button} · loslaten",
+        "gesture_button_unknown": "Knop {button} · activiteit ontvangen",
+        "gesture_observed_duration": "{duration} s waargenomen",
+        "live_buttons_heading": "Knoppen",
+        "live_recent": "Laatste gebeurtenissen",
+        "live_setup_channel": "Kanaal {channel} instellen",
+        "live_setup_button": "Knop {button} instellen",
+        "diagnostics_heading": "Apparaatstatus",
+        "diagnostics_intro": (
+            "Status uit Home Assistant, alleen om te lezen. Privé-identificatoren"
+            " van Matter worden niet getoond."
+        ),
+        "diagnostic_availability": "Beschikbaarheid van apparaat",
+        "diagnostic_matter": "Matter-verbinding",
+        "diagnostic_source": "Bron van gebeurtenissen",
+        "diagnostic_link": "Koppeling met Matter-apparaat",
+        "diagnostic_linked": "Gekoppeld",
+        "diagnostic_not_linked": "Niet gekoppeld",
+        "diagnostic_health_ok": "Draaiwiel is klaar",
+        "diagnostic_health_attention": "Draaiwiel vraagt aandacht",
+        "diagnostic_health_ok_body": (
+            "Matter en de live ontvangst van gebeurtenissen zijn verbonden."
+        ),
+        "diagnostic_connection_heading": "Verbinding",
+        "diagnostic_activity_heading": "Activiteit",
+        "diagnostic_technical_details": "Technische gegevens",
+        "diagnostic_contract": "Paneelcontract",
+        "source_core": "Matter-client van Home Assistant",
+        "source_fallback": "Passieve reserveverbinding via WebSocket",
+        "source_unloaded": "Integratie niet geladen",
+        "recovery_heading": "Aanbevolen stap",
+        "recovery_ok": "Er is geen herstelactie nodig.",
+        "recovery_matter": (
+            "Controleer de Matter-integratie en de verbinding met Matter Server."
+        ),
+        "recovery_unavailable": (
+            "Controleer de batterij van het draaiwiel en breng het dichter bij "
+            "het Matter-netwerk."
+        ),
+        "recovery_unknown": (
+            "Controleer of het draaiwiel aanwezig is in Home Assistant. Laad "
+            "daarna de integratie opnieuw."
+        ),
+        "menu": "Zijbalk van Home Assistant openen",
+    },
 }
 
 
@@ -1125,7 +1697,7 @@ def resolve_language(language: str | None) -> str:
 
 
 def panel_strings(language: str | None) -> dict[str, str]:
-    """Every string the frontend renders, in the instance's language."""
+    """Every string the frontend renders, in the requested language."""
     return dict(STRINGS[resolve_language(language)])
 
 
