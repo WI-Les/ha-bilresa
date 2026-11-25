@@ -944,8 +944,8 @@ def test_a_nonsense_channel_is_skipped_not_crashed(monkeypatch) -> None:
 def test_behaviour_labels_follow_the_instance_language(monkeypatch) -> None:
     """The grid shipped English to a Czech owner; this is the regression.
 
-    The language comes from hass.config.language, which is the instance's and not
-    each user's — Home Assistant offers a WebSocket handler no per-user locale.
+    Without a requested locale, the snapshot uses hass.config.language.
+    The current frontend explicitly sends its viewer's language.
     """
     _patch(monkeypatch, device=SimpleNamespace(id="d", name_by_user="A", area_id=None))
     entry = _entry(
@@ -956,9 +956,15 @@ def test_behaviour_labels_follow_the_instance_language(monkeypatch) -> None:
 
     czech = async_overview_snapshot(_hass(states, language="cs"), entry)
     english = async_overview_snapshot(_hass(states, language="en"), entry)
+    dutch = async_overview_snapshot(_hass(states, language="nl"), entry)
 
     assert czech["wheels"][0]["channels"][0]["behaviour"] == "Plynulé stmívání"
     assert english["wheels"][0]["channels"][0]["behaviour"] == "Smooth dimming"
+    assert dutch["wheels"][0]["channels"][0]["behaviour"] == "Vloeiend dimmen"
+    assert dutch["wheels"][0]["channels"][0]["target_label"] == "Lampa"
+    assert (
+        dutch["wheels"][0]["channels"][0]["actions"][0]["action_label"] == "Helderheid"
+    )
     # the entity's own name is the user's and is never translated
     assert czech["wheels"][0]["channels"][0]["target_label"] == "Lampa"
     # The subtitle names the mode, so the rotation row names the quantity it

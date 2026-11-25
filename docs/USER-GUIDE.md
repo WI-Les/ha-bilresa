@@ -1,6 +1,8 @@
 # BILRESA.MasterControl manual
 
-For **0.2.0**. The integration's display name is BILRESA.MasterControl; its technical domain and component folder remain `ikea_bilresa`.
+[English](USER-GUIDE.md) · [Nederlands](nl/USER-GUIDE.md)
+
+For **0.2.1**. The integration's display name is BILRESA.MasterControl; its technical domain and component folder remain `ikea_bilresa`.
 
 [Quick Start](QUICK-START.md) · [Installation](INSTALLATION.md) · [Migration and recovery](MASTERCONTROL.md)
 
@@ -29,6 +31,17 @@ On setup, MasterControl reuses Home Assistant's configured Matter client when po
 Home Assistant **2026.8 or newer** is required. For package selection, restart requirements and upgrading from the original integration, follow [Installation](INSTALLATION.md). Only one component may own the `ikea_bilresa` domain at a time.
 
 ## The panel
+
+### Language
+
+The current panel follows the viewer's Home Assistant **profile language**
+(`hass.language`). Open your profile from your name at the bottom of the sidebar
+and select **Language**. Dutch tags `nl`, `nl-NL` and `nl-BE` select the same
+Dutch catalog. Unsupported profile languages fall back to the instance language;
+older cached clients use that fallback too. This behavior already existed in 0.2.0.
+Home Assistant's default entity names follow the **instance language** under
+**Settings → System → General → Language**. User-assigned names stay unchanged.
+See the [Dutch language explanation](nl/USER-GUIDE.md#taal).
 
 Open **BILRESA.MasterControl** from the sidebar. Device names and areas come from Home Assistant. A scroll wheel provides three independent channels; the dual-button model provides two buttons.
 

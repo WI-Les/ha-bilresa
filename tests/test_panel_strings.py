@@ -1,9 +1,11 @@
-"""The panel's two languages must not drift apart."""
+"""The panel's languages must not drift apart."""
 
 from __future__ import annotations
 
 from pathlib import Path
 import re
+
+import pytest
 
 from custom_components.ikea_bilresa.panel_strings import (
     DEFAULT_LANGUAGE,
@@ -34,9 +36,9 @@ def test_every_language_has_every_key() -> None:
 def test_placeholders_match_across_languages() -> None:
     """A translation that drops {count} renders a sentence with a hole in it."""
     for key, template in STRINGS[DEFAULT_LANGUAGE].items():
-        expected = set(_PLACEHOLDER.findall(template))
+        expected = sorted(_PLACEHOLDER.findall(template))
         for language, strings in STRINGS.items():
-            actual = set(_PLACEHOLDER.findall(strings[key]))
+            actual = sorted(_PLACEHOLDER.findall(strings[key]))
             assert actual == expected, (
                 f"{language}.{key} has placeholders {actual}, English has {expected}"
             )
@@ -66,6 +68,30 @@ def test_regional_tag_falls_back_to_its_base_language() -> None:
     assert resolve_language("de") == DEFAULT_LANGUAGE
     assert resolve_language(None) == DEFAULT_LANGUAGE
     assert resolve_language("") == DEFAULT_LANGUAGE
+
+
+@pytest.mark.parametrize("language", ["nl", "nl-NL", "nl-BE"])
+def test_dutch_and_regional_tags(language: str) -> None:
+    assert resolve_language(language) == "nl"
+    assert panel_strings(language)["tab_live"] == "Live testen"
+    assert localize(language, "summary_connected", count=2) == "2 verbonden"
+
+
+def test_dutch_is_actually_translated() -> None:
+    # Proper names, units and placeholder-only formats are intentionally shared.
+    allowed = {
+        "mode_volume",
+        "quantity_volume",
+        "result_kind_volume",
+        "matter_offline",
+        "result_entity_action",
+    }
+    same = {key for key, text in STRINGS["nl"].items() if text == STRINGS["en"][key]}
+    assert same == allowed
+    assert STRINGS["nl"]["binding_gesture_hold"] == "Vasthouden"
+    assert STRINGS["nl"]["binding_gesture_release"] == "Loslaten"
+    assert "Meedimmende lamp" in STRINGS["nl"]["field_follower_light"]
+    assert "draaistap" in STRINGS["nl"]["field_step"].lower()
 
 
 def test_localize_fills_placeholders() -> None:

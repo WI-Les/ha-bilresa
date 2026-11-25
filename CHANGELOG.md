@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.1 — Nederlands / Dutch
+
+- Add complete Dutch panel and Home Assistant translations, including configuration,
+  options, entities, events, triggers, Repairs and system health.
+- Resolve `nl`, `nl-NL` and `nl-BE` through the existing language selection.
+- Add a Dutch README, Quick Start, installation/update/rollback guide and full manual.
+- Clarify the existing panel profile-language selection and instance-language entity names.
+- Extend language, placeholder, rendered-name, frontend and documentation checks.
+- Keep one package for English, Czech and Dutch; no runtime or storage migration.
+
+Nederlandse uitleg: [README](README.nl.md), [snelstart](docs/nl/QUICK-START.md),
+[handleiding](docs/nl/USER-GUIDE.md) en [release-informatie](docs/nl/RELEASE-0.2.1.md).
+
 ## 0.2.0 — BILRESA.MasterControl
 
 - Publish MasterControl through the stable release channel, retaining the

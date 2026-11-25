@@ -110,7 +110,7 @@ async def test_panel_ships_every_language_so_it_can_follow_the_user(
     assert await async_setup_panel(hass) is True
 
     config = registrar.await_args.kwargs["config"]
-    assert set(config["labels_by_language"]) == {"en", "cs"}
+    assert set(config["labels_by_language"]) == {"en", "cs", "nl"}
     assert (
         config["labels_by_language"]["en"]["add_binding"]
         != (config["labels_by_language"]["cs"]["add_binding"])
@@ -932,7 +932,7 @@ def test_the_community_card_is_outlined_and_has_hover_and_focus() -> None:
 def test_the_community_tool_texts_exist_in_both_languages() -> None:
     from custom_components.ikea_bilresa.panel_strings import STRINGS
 
-    for language in ("en", "cs"):
+    for language in ("en", "cs", "nl"):
         strings = STRINGS[language]
         for key in (
             "community_tool_link",

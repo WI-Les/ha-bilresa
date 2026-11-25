@@ -38,6 +38,7 @@ JSON_FILES = [
     "custom_components/ikea_bilresa/strings.json",
     "custom_components/ikea_bilresa/translations/en.json",
     "custom_components/ikea_bilresa/translations/cs.json",
+    "custom_components/ikea_bilresa/translations/nl.json",
 ]
 TAIL_LINES = 25
 

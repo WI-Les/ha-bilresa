@@ -63,7 +63,7 @@ TRANSLATIONS = {
 
 
 def test_english_and_czech_are_shipped() -> None:
-    assert {"cs", "en"} <= set(LANGUAGES)
+    assert {"cs", "en", "nl"} <= set(LANGUAGES)
 
 
 def test_english_translation_is_the_source_strings() -> None:
@@ -101,6 +101,11 @@ def test_czech_entity_and_trigger_text_is_actually_translated() -> None:
         if key.startswith(("entity.", "triggers.", "issues.")) and text == STRINGS[key]
     ]
     assert same == []
+
+
+def test_dutch_text_is_actually_translated() -> None:
+    same = {key for key, text in TRANSLATIONS["nl"].items() if text == STRINGS[key]}
+    assert same == {"config.step.user.title"}  # Product name stays unchanged.
 
 
 # -- every gesture, trigger and notice has its text -------------------------
@@ -163,6 +168,12 @@ def test_no_entity_name_is_hard_coded() -> None:
 # -- what Home Assistant actually renders -----------------------------------
 
 EXPECTED_NAMES = {
+    "nl": {
+        "event": "Wheel Kanaal 2",
+        "number": "Wheel Draaiwaarde 2",
+        "switch": "Wheel Knop 2",
+        "dual": "Wheel Knop 1",
+    },
     "en": {
         "event": "Wheel Channel 2",
         "number": "Wheel Dial 2",
@@ -179,7 +190,7 @@ EXPECTED_NAMES = {
 
 
 @pytest.mark.usefixtures("enable_custom_integrations")
-@pytest.mark.parametrize("language", ["en", "cs"])
+@pytest.mark.parametrize("language", LANGUAGES)
 async def test_entity_names_follow_the_instance_language(
     hass: HomeAssistant, language: str
 ) -> None:

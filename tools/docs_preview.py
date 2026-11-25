@@ -15,6 +15,7 @@ import json
 from pathlib import Path
 import sys
 from types import SimpleNamespace
+from urllib.parse import parse_qs, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
@@ -38,7 +39,7 @@ from custom_components.ikea_bilresa.panel_schema import panel_schema  # noqa: E4
 from custom_components.ikea_bilresa.panel_strings import STRINGS  # noqa: E402
 
 
-def fixture():
+def fixture(language="en"):
     names = {101: "Living room wheel", 102: "Reading corner wheel", 103: "Desk buttons"}
     states = {
         "light.example": _state("on", "Reading lamp"),
@@ -139,7 +140,7 @@ def fixture():
     entry.options = {
         "shared_profiles": [{"name": "Living room pair", "nodes": ["101", "102"]}]
     }
-    hass = _hass(states)
+    hass = _hass(states, language=language)
     hass.config_entries = SimpleNamespace(async_entries=lambda _: [entry])
     with MonkeyPatch.context() as patch:
         _patch(patch, area="Example home")
@@ -169,8 +170,8 @@ def fixture():
             "version": json.loads(
                 (ROOT / "custom_components/ikea_bilresa/manifest.json").read_text()
             )["version"],
-            "language": "en",
-            "labels": STRINGS["en"],
+            "language": language,
+            "labels": STRINGS[language],
             "labels_by_language": STRINGS,
             "schema": panel_schema(),
         },
@@ -188,9 +189,10 @@ HTML = """<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewp
 <main class="frame"><ikea-bilresa-panel></ikea-bilresa-panel></main>
 <script type="module">
 import '/component/ikea_bilresa_panel.js';
-const fixture=await(await fetch('/fixture.json')).json();const panel=document.querySelector('ikea-bilresa-panel');
+const params=new URLSearchParams(location.search);
+const fixture=await(await fetch('/fixture.json?lang='+encodeURIComponent(params.get('lang') || 'en'))).json();const panel=document.querySelector('ikea-bilresa-panel');
 panel.panel={config:fixture.config};
-panel.hass={language:'en',states:fixture.states,entities:{},devices:{},areas:{},services:{},
+panel.hass={language:new URLSearchParams(location.search).get('lang') || 'en',states:fixture.states,entities:{},devices:{},areas:{},services:{},
   callWS:async(message)=>{if(message.type.endsWith('/overview'))return structuredClone(fixture.snapshot);if(message.type.endsWith('/binding/test'))return {ok:true,action_id:'documentation-only'};return {ok:true};},
   connection:{subscribeMessage:async()=>()=>{}},callApi:async()=>({})};
 await new Promise(requestAnimationFrame);const screen=new URLSearchParams(location.search).get('screen');
@@ -200,7 +202,7 @@ if(screen&&screen!=='overview'){
  if(screen==='live'){panel._setView('live');panel._activities=[{wheel:wheel.key,channel:1,gesture:'press',presses:1,source:'panel_test',dispatch_status:'accepted',dispatched:true,result:{kind:'entity_action',action:'toggle',target:'light.example'}},{wheel:wheel.key,channel:1,gesture:'release',source:'panel_test',dispatch_status:'completed',reason:'hold_stopped'}];panel._render();}
  await new Promise(requestAnimationFrame);
  if(screen==='hold'||screen==='presses'){
-   const title=screen==='hold'?'Hold':'Short press';const item=[...panel.shadowRoot.querySelectorAll('.form-section-title')].find(e=>e.textContent.trim()===title);
+   const title=fixture.config.labels[screen==='hold'?'binding_gesture_hold':'binding_gesture_short_press'];const item=[...panel.shadowRoot.querySelectorAll('.form-section-title')].find(e=>e.textContent.trim()===title);
    item?.scrollIntoView({block:'start'});
  }
 }
@@ -213,7 +215,8 @@ class Handler(BaseHTTPRequestHandler):
         if route == "/":
             content, mime = HTML.encode(), "text/html; charset=utf-8"
         elif route == "/fixture.json":
-            content, mime = FIXTURE, "application/json"
+            language = parse_qs(urlsplit(self.path).query).get("lang", ["en"])[0]
+            content, mime = FIXTURES.get(language, FIXTURES["en"]), "application/json"
         elif route in (
             "/component/ikea_bilresa_panel.js",
             "/component/bilresa_icons.js",
@@ -238,10 +241,10 @@ async def build_fixture():
     from homeassistant.core import HomeAssistant
 
     HomeAssistant(str(ROOT / ".tooling/docs-preview"))
-    return json.dumps(fixture()).encode()
+    return {language: json.dumps(fixture(language)).encode() for language in STRINGS}
 
 
 if __name__ == "__main__":
-    FIXTURE = asyncio.run(build_fixture())
+    FIXTURES = asyncio.run(build_fixture())
     print("Documentation preview: http://127.0.0.1:8768", flush=True)
     ThreadingHTTPServer(("127.0.0.1", 8768), Handler).serve_forever()

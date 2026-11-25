@@ -1,5 +1,7 @@
 # BILRESA.MasterControl
 
+[English](README.md) · [Nederlands](README.nl.md)
+
 ![BILRESA.MasterControl for Home Assistant with the scroll wheel and dual-button Matter remotes](docs/images/bilresa-mastercontrol-banner.png)
 
 <!-- ha-marketplace:exclude-start -->
@@ -29,9 +31,9 @@ Targets can use any supported Home Assistant integration; they do not need to be
 
 ## Version and installation
 
-The current stable release is [**BILRESA.MasterControl 0.2.0**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.2.0). Install it through the normal Marketplace/HACS release channel; enabling pre-releases is not required.
+The current stable release is [**BILRESA.MasterControl 0.2.1**](https://github.com/WI-Les/ha-bilresa/releases/tag/v0.2.1). Install it through the normal Marketplace/HACS release channel; enabling pre-releases is not required.
 
-- Home Assistant **2026.11+**: [Open in Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration) and select **0.2.0**.
+- Home Assistant **2026.11+**: [Open in Marketplace](https://my.home-assistant.io/redirect/marketplace_repository/?owner=WI-Les&repository=ha-bilresa&category=integration) and select **0.2.1**.
 - Home Assistant **2026.8–2026.10**: [Open in HACS](https://my.home-assistant.io/redirect/hacs_repository/?owner=WI-Les&repository=ha-bilresa&category=integration).
 - For a manual installation: follow the [installation guide](docs/INSTALLATION.md#manual-installation).
 
